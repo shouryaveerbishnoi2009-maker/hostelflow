@@ -1,0 +1,520 @@
+================================================================================
+HOSTELFLOW: SMART HOSTEL TIME & CROWD MANAGEMENT SYSTEM
+COMPREHENSIVE PROJECT SPECIFICATION & FEATURE DOCUMENTATION
+================================================================================
+
+PROJECT METADATA
+--------------------------------------------------------------------------------
+Project Name     : HostelFlow
+Sub-Title        : Smart Hostel Time & Crowd Management System
+Course           : Database Management Systems (DBMS) - B.Tech II Year Project
+Student Author   : Shouryaveer Bishnoi
+Roll Number      : 2025BTECH111 (Section B)
+Institution      : JK Lakshmipat University, Jaipur
+Academic Year    : 2026–2027
+Primary Platform : Full-Stack Web Application (React 19 + TypeScript + Node.js RDBMS)
+Architecture     : 3-Tier Client-Server Architecture with Normalized Relational DB
+
+
+================================================================================
+1. EXECUTIVE SUMMARY & PROBLEM STATEMENT
+================================================================================
+
+1.1 THE PROBLEM
+Hostel residential life revolves around two time-critical daily activities:
+1. Eating at the Mess (breakfast, lunch, high tea, dinner)
+2. Managing Laundry cycles (submission, washing, collection)
+
+In traditional hostel setups, both systems suffer from systemic visibility failure:
+- Mess Queues: Students arrive at the mess with zero prior knowledge of crowd
+  levels or wait times. Mess halls experience extreme bottleneck surges at peak
+  hours, while seating remains underutilized during quiet periods.
+- Serving Delays: Meal turnaround depends heavily on dish preparation complexity
+  (e.g., hot puris or dosas take longer to serve than self-serve rice/dal), but
+  students have no visibility into expected dining duration.
+- Laundry Frustration: Laundry bags disappear for days into an opaque queue.
+  Students make repeated physical trips to the laundry depot only to find their
+  clothes are still in the wash or not yet processed.
+- Equipment/Paper Overhead: Traditional management relies either on tedious manual
+  paper registers or expensive, proprietary biometric turnstiles and RFID readers
+  that frequently break down.
+
+1.2 THE HOSTELFLOW SOLUTION: "CAPTURE ONCE, DERIVE THE REST"
+HostelFlow solves these problems through an elegant, database-driven philosophy:
+- A single QR code scan at the mess entrance automatically calculates the
+  student's expected exit time, updates live crowd counters, and registers their visit.
+- No checkout or exit scan is required. Exit time is derived mathematically from
+  the menu's dish preparation time, standard eating duration, and a safety buffer.
+- Laundry tracking uses permanent 1:1 assigned barcoded/tagged bags (e.g. B-214
+  assigned to Room 214) with a dynamic queue-aware turnaround estimation engine.
+- 100% pure SQL aggregation over historical data drives 30-day crowd forecasts
+  without requiring heavy machine learning models or third-party cloud services.
+
+
+================================================================================
+2. SYSTEM ARCHITECTURE & TECHNICAL STACK
+================================================================================
+
+HostelFlow implements a decoupled, high-performance 3-Tier architecture:
+
++------------------------------------------------------------------------------+
+|                           TIER 1: PRESENTATION LAYER                         |
+|  - React 19 + TypeScript Single Page Application (SPA)                       |
+|  - Tailwind CSS v4 styling with responsive mobile-first UI tokens           |
+|  - In-browser real-time QR code camera scanner powered by jsQR              |
+|  - Native WebRTC media stream capture with HTTPS security context            |
++------------------------------------------------------------------------------+
+                                      |
+                       JSON REST API via HTTPS / Proxy
+                                      v
++------------------------------------------------------------------------------+
+|                           TIER 2: APPLICATION LAYER                          |
+|  - Native Node.js REST API Server (zero heavy external frameworks)           |
+|  - Modular services: messService, laundryService, analyticsService, auth     |
+|  - Vite Development Server with built-in API reverse proxy                   |
+|  - HTTPS TLS gateway for secure local network mobile camera access          |
++------------------------------------------------------------------------------+
+                                      |
+                            Direct In-Memory / WAL
+                                      v
++------------------------------------------------------------------------------+
+|                             TIER 3: DATA LAYER                               |
+|  - SQLite 3 Relational Database Engine via modern Node built-in node:sqlite  |
+|  - Write-Ahead Logging (WAL) mode enabled for high concurrency               |
+|  - 7 Normalized relations in Boyce-Codd Normal Form (BCNF / 3NF)             |
+|  - Strict Foreign Keys, CHECK constraints, and unique compound indexes       |
++------------------------------------------------------------------------------+
+
+
+================================================================================
+3. RELATIONAL DATABASE DESIGN & BCNF NORMALIZATION
+================================================================================
+
+The database schema consists of 7 normalized tables designed to eliminate all
+insertion, update, and deletion anomalies.
+
+3.1 SCHEMA SPECIFICATION
+
+1. TABLE: HOSTEL
+   Stores campus residential blocks.
+   - hostel_id      : INTEGER PRIMARY KEY AUTOINCREMENT
+   - hostel_name    : TEXT NOT NULL UNIQUE (e.g., 'Block A', 'Block B')
+   - block_code     : TEXT (e.g., 'BLK-A')
+
+2. TABLE: STUDENT
+   Stores authenticated student residents.
+   - student_id     : INTEGER PRIMARY KEY AUTOINCREMENT
+   - roll_no        : TEXT NOT NULL UNIQUE (e.g., '2025BTECH111')
+   - name           : TEXT NOT NULL
+   - hostel_id      : INTEGER NOT NULL REFERENCES HOSTEL(hostel_id)
+   - room_no        : TEXT NOT NULL (e.g., '214')
+   - phone          : TEXT NOT NULL
+   - notification_laundry : INTEGER DEFAULT 1 (Boolean toggle)
+
+3. TABLE: MEAL_TYPE
+   Configures the 4 daily meal periods and standard durations.
+   - meal_id        : INTEGER PRIMARY KEY AUTOINCREMENT
+   - meal_name      : TEXT NOT NULL UNIQUE ('Breakfast', 'Lunch', 'High Tea', 'Dinner')
+   - standard_start_time : TEXT NOT NULL ('08:00', '11:30', '17:00', '20:00')
+   - standard_end_time   : TEXT NOT NULL ('09:00', '14:00', '18:00', '22:00')
+   - avg_eating_time_minutes : INTEGER NOT NULL (15 min for Breakfast/Tea, 20 min for Lunch/Dinner)
+   - buffer_time_minutes     : INTEGER DEFAULT 5
+   - time_display   : TEXT NOT NULL (e.g., '11:30 AM - 2:00 PM')
+
+4. TABLE: MESS_MENU
+   Stores the daily dish rotation and dish preparation complexity.
+   - menu_id        : INTEGER PRIMARY KEY AUTOINCREMENT
+   - meal_id        : INTEGER NOT NULL REFERENCES MEAL_TYPE(meal_id) ON DELETE CASCADE
+   - day_of_week    : TEXT NOT NULL CHECK(day_of_week IN ('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'))
+   - dish_name      : TEXT NOT NULL
+   - expected_prep_time_minutes : INTEGER NOT NULL CHECK(expected_prep_time_minutes >= 0)
+   - serving_note   : TEXT
+   * Constraint     : UNIQUE(meal_id, day_of_week) -> Prevents multiple dish conflicts.
+
+5. TABLE: MESS_VISIT
+   Records individual student mess check-ins and calculated stays.
+   - visit_id       : INTEGER PRIMARY KEY AUTOINCREMENT
+   - student_id     : INTEGER NOT NULL REFERENCES STUDENT(student_id) ON DELETE CASCADE
+   - meal_id        : INTEGER NOT NULL REFERENCES MEAL_TYPE(meal_id) ON DELETE RESTRICT
+   - visit_date     : DATE NOT NULL (YYYY-MM-DD)
+   - mess_entry_time: TIME NOT NULL (HH:MM:SS)
+   - mess_exit_time : TIME NOT NULL (HH:MM:SS, derived expected exit)
+   - entry_timestamp: DATETIME NOT NULL (Full ISO timestamp)
+   - expected_exit_timestamp : DATETIME NOT NULL (Full ISO timestamp)
+
+6. TABLE: LAUNDRY_BAG
+   Maintains the strict permanent 1:1 student-to-bag physical relationship.
+   - bag_number     : TEXT PRIMARY KEY (e.g., 'B-214')
+   - student_id     : INTEGER NOT NULL UNIQUE REFERENCES STUDENT(student_id) ON DELETE CASCADE
+   * Constraint     : UNIQUE(student_id) guarantees no student has multiple bags.
+
+7. TABLE: LAUNDRY_REQUEST
+   Tracks individual washing cycles and order progress.
+   - request_id     : INTEGER PRIMARY KEY AUTOINCREMENT
+   - bag_number     : TEXT NOT NULL REFERENCES LAUNDRY_BAG(bag_number) ON DELETE CASCADE
+   - submitted_datetime : DATETIME NOT NULL
+   - bags_ahead_at_submission : INTEGER NOT NULL DEFAULT 0 (Queue snapshot)
+   - expected_return_datetime : DATETIME NOT NULL
+   - actual_received_datetime : DATETIME (Filled upon student pickup)
+   - status         : TEXT NOT NULL CHECK(status IN ('SUBMITTED','WASHING','READY','RECEIVED')) DEFAULT 'SUBMITTED'
+
+3.2 NORMALIZATION SUMMARY
+- 1NF (Atomic Attributes): No multi-valued attributes, no repeating groups.
+- 2NF (No Partial Dependencies): All tables use single-attribute surrogate or
+  natural keys; partial dependencies on composite keys are mathematically impossible.
+- 3NF / BCNF (No Transitive Dependencies): Every non-key attribute depends
+  strictly and directly on the candidate key. For example, student details are
+  never duplicated inside MESS_VISIT or LAUNDRY_REQUEST; only student_id or
+  bag_number foreign keys are stored.
+
+
+================================================================================
+4. COMPLETE FEATURE-BY-FEATURE SPECIFICATION
+================================================================================
+
+--------------------------------------------------------------------------------
+FEATURE 1: DYNAMIC MESS TIME & CROWD ESTIMATION
+--------------------------------------------------------------------------------
+- Description: Automatically counts how many students are currently inside the
+  mess hall by comparing the current clock time against the stored
+  expected_exit_timestamp in MESS_VISIT records.
+- Logic:
+    SELECT COUNT(*) FROM MESS_VISIT
+    WHERE visit_date = CURRENT_DATE
+      AND entry_timestamp <= CURRENT_TIMESTAMP
+      AND expected_exit_timestamp > CURRENT_TIMESTAMP;
+- User Experience:
+  The app displays a live crowd meter (e.g. "32 students dining", "27% Capacity")
+  with color-coded congestion tags:
+    * 0 - 35 students   -> "Quiet" (Green)
+    * 36 - 70 students  -> "Moderate" (Blue)
+    * 71 - 100 students -> "Busy" (Amber)
+    * 101+ students     -> "Peak / High Queue" (Red)
+- No Checkout Needed: Students do not need to scan their phone when leaving. The
+  system automatically decrements the active counter as their expected exit time passes.
+
+--------------------------------------------------------------------------------
+FEATURE 2: 4-MEAL DAILY CLASSIFICATION & EARLY ARRIVAL PROTECTION
+--------------------------------------------------------------------------------
+- Description: Recognizes the 4 distinct daily dining windows:
+    1. Breakfast : 08:00 - 09:00 (Prep ~2 min, Eating 15 min)
+    2. Lunch     : 11:30 - 14:00 (Prep ~3 min, Eating 20 min)
+    3. High Tea  : 17:00 - 18:00 (Prep ~2 min, Eating 15 min)
+    4. Dinner    : 20:00 - 22:00 (Prep ~5 min, Eating 20 min)
+- Early Arrival Protection (Synopsis Section 4.3):
+  Students often arrive outside the mess 5 to 15 minutes before the doors open.
+  If a student scans at 11:22 AM (8 minutes before Lunch opens at 11:30 AM):
+  - The system records their arrival without throwing an error.
+  - The exit calculation start is anchored to the OFFICIAL OPENING TIME (11:30 AM)
+    rather than their early scan time (11:22 AM).
+  - The UI informs the student: "Early arrival recorded. Lunch opens in 8 min.
+    Your expected exit is calculated from 11:30 AM."
+
+--------------------------------------------------------------------------------
+FEATURE 3: MATHEMATICAL EXIT CALCULATION FORMULA
+--------------------------------------------------------------------------------
+- Formula:
+    expected_exit = calculation_start + prep_minutes + eating_minutes + buffer_minutes
+  Where:
+    - calculation_start : Actual scan time (if open) OR meal start time (if early)
+    - prep_minutes      : Sourced dynamically from MESS_MENU for today's dish
+    - eating_minutes    : Sourced from MEAL_TYPE (15 min or 20 min)
+    - buffer_minutes    : Standard 5-minute clearing/water/handwash buffer
+- Transparency:
+  Upon scanning, the modal reveals the exact breakdown to the student:
+  e.g.: Entry (1:15 PM) + Serve (3m) + Eat (20m) + Buffer (5m) = Exit at 1:43 PM.
+
+--------------------------------------------------------------------------------
+FEATURE 4: DUPLICATE CHECK-IN GUARD (SINGLE SCAN ENFORCEMENT)
+--------------------------------------------------------------------------------
+- Description: Prevents double-scanning or accidental duplicate visits.
+- Logic:
+  If a student scans the QR code twice during the same meal window on the same date:
+  - The backend intercepts the query and finds the existing visit record.
+  - The database DOES NOT create a duplicate record.
+  - The UI informs the student: "Already checked in. Your expected exit is 1:43 PM."
+  - This preserves database statistical integrity and avoids inflating crowd counts.
+
+--------------------------------------------------------------------------------
+FEATURE 5: 30-DAY HISTORICAL CROWD FORECASTING (PURE SQL)
+--------------------------------------------------------------------------------
+- Description: Forecasts the expected crowd for any upcoming meal without complex AI.
+- Logic:
+  Aggregates actual check-ins across the past 30 days for the same day-of-week and
+  meal type, segmenting into 15-minute intervals.
+- Student Benefit:
+  The student mess tab shows: "Crowd Forecast: Lunch is quietest between
+  12:15 PM - 12:45 PM. Peak crowd typically occurs at 1:15 PM."
+
+--------------------------------------------------------------------------------
+FEATURE 6: WEEKLY MESS MENU & DISH PREPARATION CORRELATION
+--------------------------------------------------------------------------------
+- Description: Full 7-day schedule covering all 28 meal combinations across the week.
+- Menu Diversity:
+  - Monday    : Poha, Rajma Chawal, Veg Cutlet, Paneer Butter Masala
+  - Tuesday   : Idli Sambar, Kadhi Pakora, Samosa Chaat, Dal Makhani
+  - Wednesday : Aloo Paratha, Chole Bhature, Bread Pakora, Dum Aloo
+  - Thursday  : Masala Dosa, Dal Tadka & Jeera Rice, Pav Bhaji, Shahi Paneer
+  - Friday    : Uttapam, Veg Biryani, Grilled Sandwich, Kofta Curry
+  - Saturday  : Methi Thepla, Khichdi & Kadhi, Kachori, Malai Kofta
+  - Sunday    : Puri Bhaji, Special Thali, Maggi / Pasta, Kadhai Paneer
+- Dish Prep Correlation: Dishes requiring on-demand preparation (e.g. Puri Bhaji:
+  5 min prep) dynamically lengthen the expected exit time compared to pre-portioned
+  meals (e.g. Khichdi: 2 min prep).
+
+--------------------------------------------------------------------------------
+FEATURE 7: PERMANENT 1:1 LAUNDRY BAG ASSIGNMENT
+--------------------------------------------------------------------------------
+- Description: Eliminates lost clothing and bag confusion.
+- Logic:
+  Every registered student is permanently linked to exactly one physical laundry
+  bag derived from their room number (e.g. Room 214 -> Bag 'B-214').
+- Database Constraint:
+  The `UNIQUE(student_id)` constraint on `LAUNDRY_BAG` ensures a student cannot
+  accidentally register duplicate bags or mix bags with roommates.
+
+--------------------------------------------------------------------------------
+FEATURE 8: DYNAMIC LAUNDRY RETURN ESTIMATION & QUEUE SNAPSHOT
+--------------------------------------------------------------------------------
+- Description: Accurately predicts when a laundry bag will be ready for pickup.
+- Logic:
+  At the exact millisecond the bag is submitted:
+  1. The system counts how many bags are ahead in line (status IN ('SUBMITTED','WASHING')).
+  2. It saves this number into `bags_ahead_at_submission`.
+  3. Return estimation formula:
+       expected_return = submission_time + base_turnaround (24 hrs) + (bags_ahead * 20 min)
+- Student Benefit:
+  Students immediately see: "Bag B-214: 3 bags ahead. Ready by Tomorrow at 4:30 PM."
+
+--------------------------------------------------------------------------------
+FEATURE 9: 4-STEP LAUNDRY LIFECYCLE STATE MACHINE
+--------------------------------------------------------------------------------
+- Description: Complete lifecycle tracking from drop-off to collection:
+    [1] SUBMITTED -> Student drops bag at hostel laundry depot.
+    [2] WASHING   -> Staff loads bag into commercial washing / drying machines.
+    [3] READY     -> Clothes are folded and bagged; ready on collection shelf.
+    [4] RECEIVED  -> Student picks up bag and verifies delivery.
+- Timestamp Recording:
+  `submitted_datetime` is captured on drop-off, and `actual_received_datetime`
+  is locked into the database upon final handover, enabling admin turnaround auditing.
+
+--------------------------------------------------------------------------------
+FEATURE 10: IN-BROWSER INSTANT QR SCANNER (jsQR + WEBRTC)
+--------------------------------------------------------------------------------
+- Description: Direct, high-speed camera scanner embedded inside the web app.
+- Technology:
+  - Uses native HTML5 `navigator.mediaDevices.getUserMedia` with HTTPS security context.
+  - Processes video frames at high frequency using the `jsQR` library.
+  - Automatically identifies the standee string `HOSTELFLOW_MESS_ENTRANCE_BLOCK_A`.
+  - Zero lag, zero external scanning apps, zero photo uploading required.
+  - Includes a fallback "Demo Scan" button for testing on devices without physical cameras.
+
+--------------------------------------------------------------------------------
+FEATURE 11: DIGITAL MESS ENTRANCE STANDEE
+--------------------------------------------------------------------------------
+- Description: A dedicated view in the application displaying the official
+  printable/scannable QR code standee for "Mess Entrance Block A".
+- Usage:
+  Can be opened on a laptop or tablet screen placed at the mess entrance, or printed
+  on paper. Students point their mobile camera at this standee to check in.
+
+--------------------------------------------------------------------------------
+FEATURE 12: ADMIN ANALYTICS DASHBOARD
+--------------------------------------------------------------------------------
+- Description: Comprehensive management portal for hostel wardens and chief cooks.
+- Live Metrics:
+  - Total registered student residents.
+  - Current real-time students dining in the mess.
+  - Active laundry bags in queue.
+  - Total check-ins logged today.
+- Dish Impact Analysis:
+  Calculates average dining dwell time per dish, helping mess managers determine
+  which meals cause extended seating bottlenecks.
+- 24-Hour Crowd Heatmap:
+  Visualizes peak occupancy times across morning, afternoon, and evening slots.
+
+--------------------------------------------------------------------------------
+FEATURE 13: LAUNDRY STAFF OPERATOR CONSOLE
+--------------------------------------------------------------------------------
+- Description: Streamlined, touch-friendly console designed specifically for
+  hostel laundry workers.
+- Capabilities:
+  - Live queue view of all pending bags ordered by submission time.
+  - One-tap status advancement:
+      [Start Wash] -> advances SUBMITTED to WASHING
+      [Mark Ready] -> advances WASHING to READY
+      [Hand Over]  -> advances READY to RECEIVED
+  - Filter tabs: All, Submitted, In Wash, Ready for Collection.
+  - Displays bag owner name, room number, and phone for quick verification.
+
+--------------------------------------------------------------------------------
+FEATURE 14: AUTHENTICATION & STUDENT ONBOARDING
+--------------------------------------------------------------------------------
+- Description: Secure mobile login for hostel students.
+- Flow:
+  1. Student enters their Roll Number (e.g. `2025BTECH111`).
+  2. System issues a verification OTP (demo OTP `1111`).
+  3. If new student, guides through quick 1-time setup (Name, Block, Room, Phone).
+  4. Automatically provisions their permanent laundry bag `B-{roomNo}`.
+  5. Student profile persists across sessions with preference toggles.
+
+
+================================================================================
+5. REST API ENDPOINTS SPECIFICATION
+================================================================================
+
+All API endpoints are hosted at `/api/*` and return standard JSON.
+
+5.1 AUTHENTICATION & STUDENT MANAGEMENT
+- POST /api/auth/send-otp
+  Request  : { "rollNo": "2025BTECH111" }
+  Response : { "success": true, "message": "OTP sent", "demoOtp": "1111" }
+
+- POST /api/auth/verify-otp
+  Request  : { "rollNo": "2025BTECH111", "otp": "1111" }
+  Response : { "success": true, "student": { ... }, "bag": { ... } }
+
+- POST /api/students/setup
+  Request  : { "rollNo": "...", "name": "...", "hostelName": "...", "roomNo": "214", "phone": "..." }
+  Response : { "success": true, "student": { ... }, "bag": { "bag_number": "B-214" } }
+
+- GET /api/students/:rollNo
+  Response : Full student profile details, hostel assignment, and permanent bag.
+
+5.2 MESS OPERATIONS
+- GET /api/mess/status
+  Response : Current active meal, dishes, live crowd count, capacity, and crowd level.
+
+- GET /api/mess/forecast?day=Monday
+  Response : 30-day historical crowd curve for every 15-minute slot of the day.
+
+- GET /api/mess/menu/today
+  Response : Today's complete breakfast, lunch, high tea, and dinner menu.
+
+- GET /api/mess/menu/weekly
+  Response : 7-day full university mess menu matrix.
+
+- POST /api/mess/scan
+  Request  : { "rollNo": "2025BTECH111", "scanTime": "2026-11-09T12:30:00Z" }
+  Response : {
+    "success": true,
+    "alreadyCheckedIn": false,
+    "dish": { "name": "Rajma Chawal", "prepMinutes": 3 },
+    "calculation": { "eatingMinutes": 20, "expectedExitDisplay": "12:58 PM", "isEarlyArrival": false },
+    "visit": { "expectedExitTime": "12:58 PM", "meal": "Lunch" }
+  }
+
+5.3 LAUNDRY OPERATIONS
+- GET /api/laundry/status/:rollNo
+  Response : Active laundry request, step, bags ahead in queue, dynamic ETA.
+
+- POST /api/laundry/submit
+  Request  : { "rollNo": "2025BTECH111" }
+  Response : { "success": true, "request": { ... }, "bagsAhead": 2, "estimatedReturn": "..." }
+
+- GET /api/laundry/queue
+  Response : Full list of laundry bags for the staff console.
+
+- PUT /api/laundry/request/:requestId/status
+  Request  : { "status": "WASHING" | "READY" | "RECEIVED" }
+  Response : { "success": true, "updatedRequest": { ... } }
+
+5.4 ADMIN ANALYTICS
+- GET /api/admin/stats
+  Response : System-wide aggregates: total students, current mess occupancy, laundry queue, today's visits.
+
+- GET /api/admin/dish-impact
+  Response : Average dining duration per dish across historical visits.
+
+- GET /api/admin/crowd-heatmap
+  Response : 24-hour occupancy distribution for facility planning.
+
+
+================================================================================
+6. HOW TO RUN, SEED, TEST & USE
+================================================================================
+
+6.1 PREREQUISITES
+- Node.js (version 20, 22, or 24+ recommended with native `node:sqlite`)
+- Modern web browser (Chrome, Safari, Edge, Firefox)
+
+6.2 STEP-BY-STEP COMMANDS
+
+1. Seed the Database:
+   Populates the database with 15 university students, the full weekly menu,
+   30 days of realistic historical visits (over 2,700 records), and sample laundry bags:
+   $ npm run seed
+   (or: node backend/db/seed.js)
+
+2. Run the Automated Test Suite:
+   Executes 20 automated tests validating formulas, BCNF relations, early arrivals,
+   duplicate check-in guards, and queue estimations:
+   $ npm run test:backend
+   (Result: 20 passed, 0 failed)
+
+3. Start the Backend API Server:
+   $ npm run backend
+   (Runs on http://localhost:3001)
+
+4. Start the Frontend Application:
+   $ npm run dev
+   (Runs on https://localhost:8443)
+
+6.3 OPENING ON A PHONE OVER WI-FI (FOR LIVE QR SCANNING)
+Because modern mobile browsers strictly require a Secure Context (HTTPS) to grant
+camera access to `navigator.mediaDevices.getUserMedia`, the Vite dev server is
+pre-configured with local SSL certificates:
+1. Make sure your phone and laptop are connected to the same Wi-Fi.
+2. Check your laptop IP address (e.g. `10.41.23.102`).
+3. On your phone browser, open:
+     https://10.41.23.102:8443
+4. Tap "Advanced" -> "Proceed to 10.41.23.102" (bypassing the local self-signed cert).
+5. Tap the bottom scan button and tap "Allow" when prompted for camera access.
+6. Point your phone camera at the Mess QR Standee on your laptop screen.
+7. Instant check-in confirmation will appear on your phone screen!
+
+
+================================================================================
+7. VIVA VOCE & ACADEMIC DEFENSE PREPARATION (Q&A)
+================================================================================
+
+Q1: Why did you choose a derived exit time instead of an exit QR scan?
+A1: Traditional exit scans suffer from high human friction: students frequently
+    forget to scan out when leaving, which causes the active crowd count to remain
+    falsely inflated indefinitely. Our model follows the principle "Capture once,
+    derive the rest". By combining dish preparation time, empirical eating times,
+    and a 5-minute buffer, the system automatically frees up occupancy counts
+    without placing any behavioral burden on students.
+
+Q2: How does your system predict mess crowds without Machine Learning?
+A2: Standard hostel schedules are strictly periodic on a 7-day cycle. Student
+    arrival behavior on any given Monday is strongly correlated with previous
+    Mondays. We compute rolling aggregations (AVERAGE, COUNT) grouped by
+    (day_of_week, meal_id, time_slot) over a 30-day sliding window in SQLite.
+    This pure SQL approach delivers high accuracy, zero training latency, and
+    requires zero heavy external Python/ML runtime overhead.
+
+Q3: Explain how 1:1 permanent laundry bag assignment improves database integrity.
+A3: In traditional systems, laundry tickets are generated ad-hoc, leading to
+    duplicate ticket numbers, lost tags, and untracked clothes. In HostelFlow,
+    the `LAUNDRY_BAG` table enforces `student_id UNIQUE`. This ensures a 1:1
+    physical-to-digital mapping. A student can only ever have one active permanent
+    bag, eliminating ambiguity for laundry workers and students alike.
+
+Q4: What database normal form does HostelFlow satisfy?
+A4: All 7 relations satisfy 3NF and Boyce-Codd Normal Form (BCNF). All attributes
+    are atomic (1NF). All non-prime attributes are fully functionally dependent
+    on the entire primary key (2NF). Every determinant in functional dependencies
+    is a superkey, meaning there are no transitive dependencies (3NF/BCNF).
+
+Q5: What happens if a student scans 10 minutes before the mess opens?
+A5: The system implements an Early Arrival window (up to 15 minutes before opening).
+    Instead of rejecting the student, it logs their visit but anchors the expected
+    exit time calculation to the official opening time (e.g., 11:30 AM for lunch)
+    rather than their 11:20 AM arrival, accurately reflecting when their meal will
+    actually begin.
+
+================================================================================
+END OF DOCUMENTATION - HOSTELFLOW SYSTEM
+================================================================================
+
