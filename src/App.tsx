@@ -1246,6 +1246,28 @@ function AdminDashboard() {
   } | null>(null);
   const [heatmap, setHeatmap] = useState<Record<string, Record<string, number>> | null>(null);
 
+  // Live Mess State for Admin (Real-time in/out head count)
+  const [liveMess, setLiveMess] = useState<{
+    isOpen: boolean;
+    mealName?: string;
+    mealWindow?: string;
+    crowdLabel?: string;
+    activeStudents?: number;
+    waitingInQueue?: number;
+    eatingCount?: number;
+    nextExpectedExit?: string | null;
+    recommendation?: { title: string; detail: string };
+  } | null>(null);
+
+  // Hourly Crowd Heatmap for Admin
+  const [selectedMeal, setSelectedMeal] = useState<MealName>("Lunch");
+  const [mealForecast, setMealForecast] = useState<{
+    slots: Array<{ time: string; value: number; label: string; level: number; best?: boolean }>;
+    bestSlotRange: string;
+    peakSlotTime: string;
+  } | null>(null);
+  const [selectedSlotIdx, setSelectedSlotIdx] = useState(0);
+
   useEffect(() => {
     api.getAdminOverview().then((res) => {
       if (res) setData(res);
@@ -1253,7 +1275,19 @@ function AdminDashboard() {
     api.getAdminHeatmap().then((res) => {
       if (res) setHeatmap(res);
     });
+    api.getLiveCrowdStatus().then((res) => {
+      if (res) setLiveMess(res);
+    });
   }, []);
+
+  useEffect(() => {
+    api.getMealForecast(selectedMeal).then((res) => {
+      if (res && res.slots) {
+        setMealForecast(res);
+        setSelectedSlotIdx(Math.max(0, res.slots.findIndex((s) => s.best)));
+      }
+    });
+  }, [selectedMeal]);
 
   const headline = data?.headline || {
     displayString: "1,184 mess visits this week, up 6%",
@@ -1277,6 +1311,8 @@ function AdminDashboard() {
     { dish_name: "Aloo paratha & curd", expected_prep_time_minutes: 2, meal_name: "Breakfast", avg_duration_minutes: 22 },
   ];
 
+  const displaySlots = mealForecast?.slots ?? FORECASTS[selectedMeal] ?? FORECASTS.Lunch;
+
   return (
     <section className="screen">
       <header className="page-header">
@@ -1291,6 +1327,116 @@ function AdminDashboard() {
         <p className="eyebrow" style={{ color: "var(--sage)" }}>Live Facility Load</p>
         <h2>{headline.displayString}</h2>
         <p>Real-time analytics computed directly via SQL aggregation over stored visits.</p>
+      </div>
+
+      {/* Live Mess Occupancy Card (Real-time in/out head count) */}
+      <div className="admin-card" style={{ marginBottom: "22px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "10px" }}>
+          <div>
+            <p className="eyebrow" style={{ color: "var(--terracotta)" }}>
+              <span className="live-dot" style={{ display: "inline-block", marginRight: "6px" }} />
+              Live Mess Occupancy & Crowd Headcount
+            </p>
+            <h2 style={{ fontSize: "28px", margin: "4px 0" }}>
+              {liveMess?.activeStudents ?? 32} Students Dining Inside
+            </h2>
+            <p style={{ color: "var(--ink-soft)", fontSize: "13px" }}>
+              {liveMess?.isOpen ? `${liveMess.mealName} active window (${liveMess.mealWindow})` : "Current meal window active"}
+            </p>
+          </div>
+          <span className={`status ${liveMess?.crowdLabel === "Busy" ? "status--busy" : liveMess?.crowdLabel === "Quiet" ? "status--quiet" : "status--live"}`} style={{ fontSize: "13px", padding: "6px 14px" }}>
+            {liveMess?.crowdLabel || "Moderate"} Load
+          </span>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(135px, 1fr))", gap: "12px", margin: "16px 0" }}>
+          <div style={{ padding: "14px", background: "var(--paper)", borderRadius: "12px", border: "1px solid var(--border)" }}>
+            <small style={{ color: "var(--ink-soft)", fontSize: "11px", fontWeight: 700, textTransform: "uppercase" }}>In Serving Queue</small>
+            <strong style={{ display: "block", fontSize: "26px", color: "var(--terracotta)", marginTop: "4px" }}>
+              {liveMess?.waitingInQueue ?? 9}
+            </strong>
+            <span style={{ fontSize: "11px", color: "var(--ink-soft)" }}>Waiting at counter</span>
+          </div>
+
+          <div style={{ padding: "14px", background: "var(--paper)", borderRadius: "12px", border: "1px solid var(--border)" }}>
+            <small style={{ color: "var(--ink-soft)", fontSize: "11px", fontWeight: 700, textTransform: "uppercase" }}>Seated & Eating</small>
+            <strong style={{ display: "block", fontSize: "26px", color: "var(--sage)", marginTop: "4px" }}>
+              {liveMess?.eatingCount ?? 23}
+            </strong>
+            <span style={{ fontSize: "11px", color: "var(--ink-soft)" }}>Food collected</span>
+          </div>
+
+          <div style={{ padding: "14px", background: "var(--paper)", borderRadius: "12px", border: "1px solid var(--border)" }}>
+            <small style={{ color: "var(--ink-soft)", fontSize: "11px", fontWeight: 700, textTransform: "uppercase" }}>Hall Capacity</small>
+            <strong style={{ display: "block", fontSize: "26px", marginTop: "4px" }}>
+              {Math.min(100, Math.round(((liveMess?.activeStudents ?? 32) / 120) * 100))}%
+            </strong>
+            <span style={{ fontSize: "11px", color: "var(--ink-soft)" }}>{(liveMess?.activeStudents ?? 32)} / 120 seats filled</span>
+          </div>
+
+          <div style={{ padding: "14px", background: "var(--paper)", borderRadius: "12px", border: "1px solid var(--border)" }}>
+            <small style={{ color: "var(--ink-soft)", fontSize: "11px", fontWeight: 700, textTransform: "uppercase" }}>Next Departure</small>
+            <strong style={{ display: "block", fontSize: "20px", marginTop: "8px" }}>
+              {liveMess?.nextExpectedExit || "1:43 PM"}
+            </strong>
+            <span style={{ fontSize: "11px", color: "var(--ink-soft)" }}>Next wave clearing</span>
+          </div>
+        </div>
+
+        {liveMess?.recommendation && (
+          <div style={{ padding: "10px 14px", background: "var(--surface)", borderRadius: "10px", borderLeft: "4px solid var(--sage)", display: "flex", alignItems: "center", gap: "10px", fontSize: "12px" }}>
+            <Icon name="spark" size={16} />
+            <span><strong>Facility Directive:</strong> {liveMess.recommendation.title} — {liveMess.recommendation.detail}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Admin Hourly Heatmap / Rush Curve */}
+      <div className="admin-card" style={{ marginBottom: "22px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
+          <div>
+            <p className="eyebrow">Hourly Crowd Distribution Heatmap</p>
+            <h3>Meal Rush Curve & Time Slots</h3>
+          </div>
+          <div className="segmented" style={{ margin: 0 }}>
+            {MEAL_SCHEDULE.map((item) => (
+              <button
+                className={selectedMeal === item.name ? "active" : ""}
+                key={item.name}
+                onClick={() => setSelectedMeal(item.name as MealName)}
+                type="button"
+              >
+                {item.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="chart" style={{ minHeight: "160px" }}>
+          {displaySlots.map((slot, idx) => (
+            <button
+              className={`bar-column ${selectedSlotIdx === idx ? "selected" : ""}`}
+              key={slot.time}
+              onClick={() => setSelectedSlotIdx(idx)}
+              type="button"
+            >
+              {slot.best && <span className="best-label">Min</span>}
+              <span className={`bar bar--${slot.level}`}><i>{slot.value}</i></span>
+              <small>{slot.time}</small>
+            </button>
+          ))}
+        </div>
+
+        <div className="chart-legend" style={{ marginTop: "14px" }}>
+          <span><i className="legend-dot legend-dot--quiet" /> Quiet (0-30%)</span>
+          <span><i className="legend-dot legend-dot--moderate" /> Moderate (31-60%)</span>
+          <span><i className="legend-dot legend-dot--busy" /> Peak Rush (61%+)</span>
+          {mealForecast && (
+            <span style={{ marginLeft: "auto", fontWeight: 700, color: "var(--ink)", fontSize: "11px" }}>
+              Quietest Window: {mealForecast.bestSlotRange} • Peak Surge: {mealForecast.peakSlotTime || "mid-serving"}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="admin-grid-2">
@@ -1586,6 +1732,7 @@ function MessEntranceStandee() {
 }
 
 export default function App() {
+  const [userRole, setUserRole] = useState<"student" | "staff">("student");
   const [view, setView] = useState<View>("home");
   const [scanning, setScanning] = useState(false);
   const [authStage, setAuthStage] = useState<AuthStage>("login");
@@ -1606,72 +1753,134 @@ export default function App() {
     .toUpperCase();
   const studentFirstName = currentStudent.name.split(" ")[0];
 
+  const handleLogout = () => {
+    setView("home");
+    setUserRole("student");
+    setAuthStage("login");
+  };
+
   if (authStage !== "app") {
     return (
       <AuthFlow
         stage={authStage}
         setStage={setAuthStage}
         onStaffSignIn={() => {
+          setUserRole("staff");
           setAuthStage("app");
           setView("admin");
         }}
         onStudentAuthenticated={(stu) => {
+          setUserRole("student");
           setCurrentStudent((prev) => ({ ...prev, ...stu }));
         }}
       />
     );
   }
 
+  const isStaff = userRole === "staff";
+  const activeView = isStaff
+    ? view === "staff" || view === "qr" ? view : "admin"
+    : view === "mess" || view === "laundry" || view === "profile" ? view : "home";
+
   return (
     <div className="app-shell">
       <aside className="desktop-sidebar">
         <Brand />
-        <p className="sidebar-label">Student space</p>
-        <nav>
-          {navItems.map((item) => (
-            <button className={view === item.id ? "active" : ""} key={item.id} onClick={() => setView(item.id)} type="button">
-              <Icon name={item.icon} /><span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
-        <p className="sidebar-label" style={{ marginTop: "24px" }}>Campus & Staff</p>
-        <nav>
-          <button className={view === "qr" ? "active" : ""} onClick={() => setView("qr")} type="button">
-            <Icon name="scan" /><span>Mess QR Poster</span>
-          </button>
-          <button className={view === "admin" ? "active" : ""} onClick={() => setView("admin")} type="button">
-            <Icon name="calendar" /><span>Admin Analytics</span>
-          </button>
-          <button className={view === "staff" ? "active" : ""} onClick={() => setView("staff")} type="button">
-            <Icon name="bag" /><span>Laundry Staff</span>
-          </button>
-        </nav>
-        <div className="sidebar-user">
-          <span>{studentInitials}</span>
-          <div><strong>{studentFirstName}</strong><small>{currentStudent.hostelName} · {currentStudent.roomNo}</small></div>
-        </div>
+
+        {isStaff ? (
+          <>
+            <p className="sidebar-label">Campus Administration</p>
+            <nav>
+              <button className={activeView === "admin" ? "active" : ""} onClick={() => setView("admin")} type="button">
+                <Icon name="calendar" /><span>Admin Overview & Crowd</span>
+              </button>
+              <button className={activeView === "staff" ? "active" : ""} onClick={() => setView("staff")} type="button">
+                <Icon name="bag" /><span>Laundry Staff Console</span>
+              </button>
+              <button className={activeView === "qr" ? "active" : ""} onClick={() => setView("qr")} type="button">
+                <Icon name="scan" /><span>Mess QR Poster</span>
+              </button>
+            </nav>
+            <div style={{ marginTop: "auto", padding: "12px 0" }}>
+              <button
+                onClick={handleLogout}
+                type="button"
+                className="logout-row"
+                style={{ width: "100%", justifyContent: "center", background: "var(--paper)", borderRadius: "10px", padding: "10px", border: "1px solid var(--border)" }}
+              >
+                <Icon name="logout" size={16} />
+                <span>Staff Sign Out</span>
+              </button>
+            </div>
+            <div className="sidebar-user">
+              <span>AD</span>
+              <div><strong>Staff Administrator</strong><small>JKLU Facility Operations</small></div>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="sidebar-label">Student Space</p>
+            <nav>
+              {navItems.map((item) => (
+                <button className={activeView === item.id ? "active" : ""} key={item.id} onClick={() => setView(item.id)} type="button">
+                  <Icon name={item.icon} /><span>{item.label}</span>
+                </button>
+              ))}
+            </nav>
+            <div className="sidebar-user">
+              <span>{studentInitials}</span>
+              <div><strong>{studentFirstName}</strong><small>{currentStudent.hostelName} · {currentStudent.roomNo}</small></div>
+            </div>
+          </>
+        )}
       </aside>
 
       <main>
-        {view === "home" && <Home onNavigate={setView} onScan={() => setScanning(true)} student={currentStudent} />}
-        {view === "mess" && <Mess />}
-        {view === "laundry" && <Laundry student={currentStudent} />}
-        {view === "profile" && <Profile student={currentStudent} onLogout={() => { setView("home"); setAuthStage("login"); }} />}
-        {view === "qr" && <MessEntranceStandee />}
-        {view === "admin" && <AdminDashboard />}
-        {view === "staff" && <LaundryStaffConsole />}
+        {isStaff ? (
+          <>
+            {activeView === "admin" && <AdminDashboard />}
+            {activeView === "staff" && <LaundryStaffConsole />}
+            {activeView === "qr" && <MessEntranceStandee />}
+          </>
+        ) : (
+          <>
+            {activeView === "home" && <Home onNavigate={setView} onScan={() => setScanning(true)} student={currentStudent} />}
+            {activeView === "mess" && <Mess />}
+            {activeView === "laundry" && <Laundry student={currentStudent} />}
+            {activeView === "profile" && <Profile student={currentStudent} onLogout={handleLogout} />}
+          </>
+        )}
       </main>
 
-      <nav className="bottom-nav">
-        {navItems.slice(0, 2).map((item) => (
-          <button className={view === item.id ? "active" : ""} key={item.id} onClick={() => setView(item.id)} type="button"><Icon name={item.icon} /><span>{item.label}</span></button>
-        ))}
-        <button className="scan-button" aria-label="Scan mess QR" onClick={() => setScanning(true)} type="button"><Icon name="scan" size={25} /></button>
-        {navItems.slice(2).map((item) => (
-          <button className={view === item.id ? "active" : ""} key={item.id} onClick={() => setView(item.id)} type="button"><Icon name={item.icon} /><span>{item.label}</span></button>
-        ))}
-      </nav>
-      {scanning && <ScanModal onClose={() => setScanning(false)} student={currentStudent} />}
+      {/* Role-Specific Mobile Bottom Navigation */}
+      {isStaff ? (
+        <nav className="bottom-nav">
+          <button className={activeView === "admin" ? "active" : ""} onClick={() => setView("admin")} type="button">
+            <Icon name="calendar" /><span>Overview</span>
+          </button>
+          <button className={activeView === "staff" ? "active" : ""} onClick={() => setView("staff")} type="button">
+            <Icon name="bag" /><span>Laundry</span>
+          </button>
+          <button className={activeView === "qr" ? "active" : ""} onClick={() => setView("qr")} type="button">
+            <Icon name="scan" /><span>Standee</span>
+          </button>
+          <button onClick={handleLogout} type="button">
+            <Icon name="logout" /><span>Exit</span>
+          </button>
+        </nav>
+      ) : (
+        <nav className="bottom-nav">
+          {navItems.slice(0, 2).map((item) => (
+            <button className={activeView === item.id ? "active" : ""} key={item.id} onClick={() => setView(item.id)} type="button"><Icon name={item.icon} /><span>{item.label}</span></button>
+          ))}
+          <button className="scan-button" aria-label="Scan mess QR" onClick={() => setScanning(true)} type="button"><Icon name="scan" size={25} /></button>
+          {navItems.slice(2).map((item) => (
+            <button className={activeView === item.id ? "active" : ""} key={item.id} onClick={() => setView(item.id)} type="button"><Icon name={item.icon} /><span>{item.label}</span></button>
+          ))}
+        </nav>
+      )}
+
+      {!isStaff && scanning && <ScanModal onClose={() => setScanning(false)} student={currentStudent} />}
     </div>
   );
 }
