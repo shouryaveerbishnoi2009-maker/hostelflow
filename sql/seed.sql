@@ -157,37 +157,37 @@ INSERT INTO MESS_VISIT (student_id, meal_id, visit_date, mess_entry_time)
 SELECT
     s.student_id,
     m.meal_id,
-    (CURRENT_DATE - (d.day_offset || ' days')::INTERVAL)::DATE AS visit_date,
-    -- Construct entry timestamp in IST and convert to UTC
+    (CURRENT_DATE - (d.day_offset * INTERVAL '1 day'))::DATE AS visit_date,
+    -- Construct clean entry timestamp by adding date + time without string concatenation
     (
-        (CURRENT_DATE - (d.day_offset || ' days')::INTERVAL)::TEXT || ' ' ||
+        (CURRENT_DATE - (d.day_offset * INTERVAL '1 day'))::DATE +
         CASE m.meal_id
             -- Breakfast slots with varied clustering
             WHEN 1 THEN 
                 CASE (s.student_id % 4)
-                    WHEN 0 THEN '08:05:00'
-                    WHEN 1 THEN '08:22:00' -- Peak slot
-                    WHEN 2 THEN '08:35:00'
-                    ELSE        '09:15:00' -- Off-peak
+                    WHEN 0 THEN TIME '08:05:00'
+                    WHEN 1 THEN TIME '08:22:00' -- Peak slot
+                    WHEN 2 THEN TIME '08:35:00'
+                    ELSE        TIME '09:15:00' -- Off-peak
                 END
             -- Lunch slots
             WHEN 2 THEN 
                 CASE (s.student_id % 4)
-                    WHEN 0 THEN '12:15:00'
-                    WHEN 1 THEN '13:00:00' -- Peak slot
-                    WHEN 2 THEN '13:20:00'
-                    ELSE        '14:05:00' -- Off-peak
+                    WHEN 0 THEN TIME '12:15:00'
+                    WHEN 1 THEN TIME '13:00:00' -- Peak slot
+                    WHEN 2 THEN TIME '13:20:00'
+                    ELSE        TIME '14:05:00' -- Off-peak
                 END
             -- Dinner slots
             ELSE 
                 CASE (s.student_id % 4)
-                    WHEN 0 THEN '20:05:00' -- Peak slot
-                    WHEN 1 THEN '20:25:00'
-                    WHEN 2 THEN '20:45:00'
-                    ELSE        '21:40:00' -- Off-peak
+                    WHEN 0 THEN TIME '20:05:00' -- Peak slot
+                    WHEN 1 THEN TIME '20:25:00'
+                    WHEN 2 THEN TIME '20:45:00'
+                    ELSE        TIME '21:40:00' -- Off-peak
                 END
         END
-    )::TIMESTAMP AT TIME ZONE 'Asia/Kolkata' AS mess_entry_time
+    ) AT TIME ZONE 'Asia/Kolkata' AS mess_entry_time
 FROM (SELECT student_id FROM STUDENT WHERE college_id = 1) s
 CROSS JOIN (SELECT meal_id FROM MEAL_TYPE WHERE college_id = 1) m
 CROSS JOIN (
@@ -200,10 +200,10 @@ ON CONFLICT (student_id, meal_id, visit_date) DO NOTHING;
 -- Also insert TODAY'S LIVE VISITS for student 2, 3, 4, 5 so Live Diners counter shows active students right now
 INSERT INTO MESS_VISIT (student_id, meal_id, visit_date, mess_entry_time)
 VALUES
-(2, 2, CURRENT_DATE, NOW() - INTERVAL '8 minutes'),
-(3, 2, CURRENT_DATE, NOW() - INTERVAL '12 minutes'),
-(4, 2, CURRENT_DATE, NOW() - INTERVAL '15 minutes'),
-(5, 2, CURRENT_DATE, NOW() - INTERVAL '5 minutes')
+(2, 2, (NOW() AT TIME ZONE 'Asia/Kolkata')::DATE, NOW() - INTERVAL '8 minutes'),
+(3, 2, (NOW() AT TIME ZONE 'Asia/Kolkata')::DATE, NOW() - INTERVAL '12 minutes'),
+(4, 2, (NOW() AT TIME ZONE 'Asia/Kolkata')::DATE, NOW() - INTERVAL '15 minutes'),
+(5, 2, (NOW() AT TIME ZONE 'Asia/Kolkata')::DATE, NOW() - INTERVAL '5 minutes')
 ON CONFLICT (student_id, meal_id, visit_date) DO NOTHING;
 
 -- 9. LAUNDRY REQUESTS (40+ Records with various statuses)
