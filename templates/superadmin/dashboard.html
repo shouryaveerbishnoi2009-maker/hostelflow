@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Super Admin SaaS Control — HostelFlow{% endblock %}
+
+{% block content %}
+<div class="portal-container superadmin-page">
+    
+    <div class="portal-header">
+        <div>
+            <h1>Super Admin Multi-College Control Deck</h1>
+            <p class="subtitle">Platform-wide overview across all onboarded universities, hostels, and student activity</p>
+        </div>
+        <div class="header-actions">
+            <a href="{{ url_for('superadmin_colleges') }}" class="btn btn-primary">➕ Onboard New University</a>
+        </div>
+    </div>
+
+    <!-- Platform Wide Totals -->
+    <div class="dashboard-grid">
+        <div class="card kpi-card">
+            <div class="kpi-icon">🏫</div>
+            <div class="kpi-number text-accent">{{ stats.total_colleges }}</div>
+            <div class="kpi-label">Onboarded Universities</div>
+        </div>
+
+        <div class="card kpi-card">
+            <div class="kpi-icon">👥</div>
+            <div class="kpi-number">{{ stats.total_visits }}</div>
+            <div class="kpi-label">Total Mess Swipes Processed</div>
+        </div>
+
+        <div class="card kpi-card">
+            <div class="kpi-icon">🧺</div>
+            <div class="kpi-number">{{ stats.total_laundry }}</div>
+            <div class="kpi-label">Total Laundry Orders</div>
+        </div>
+
+        <div class="card kpi-card">
+            <div class="kpi-icon">🛡️</div>
+            <div class="kpi-number">100%</div>
+            <div class="kpi-label">Tenant Isolation Guarantee</div>
+        </div>
+    </div>
+
+    <!-- Onboarded Colleges Table -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h3>🏫 Active University Deployments</h3>
+            <span class="badge badge-primary">{{ colleges|length }} Institutions</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>College Code</th>
+                            <th>Institution Name</th>
+                            <th>City</th>
+                            <th>Hostels</th>
+                            <th>Students</th>
+                            <th>Subscription</th>
+                            <th>Status</th>
+                            <th>Switch Context</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for col in colleges %}
+                        <tr>
+                            <td><strong class="bag-code-pill">{{ col.college_code }}</strong></td>
+                            <td><strong>{{ col.college_name }}</strong></td>
+                            <td>{{ col.city or '—' }}</td>
+                            <td>{{ col.total_hostels }} Hostels</td>
+                            <td>{{ col.total_students }} Enrolled</td>
+                            <td>
+                                <span class="badge badge-info">{{ col.subscription_plan }}</span>
+                            </td>
+                            <td>
+                                {% if col.is_active %}
+                                <span class="badge badge-success">ACTIVE</span>
+                                {% else %}
+                                <span class="badge badge-danger">SUSPENDED</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{{ url_for('superadmin_switch_college', college_id=col.college_id) }}" class="btn btn-sm btn-outline-primary">
+                                    Switch to {{ col.college_code }} ➔
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

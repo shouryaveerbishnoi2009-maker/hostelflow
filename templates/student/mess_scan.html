@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block title %}QR Mess Check-In — HostelFlow{% endblock %}
+
+{% block content %}
+<div class="portal-container scan-page">
+    
+    <div class="scan-wrapper">
+        <div class="scan-header text-center">
+            <span class="scan-badge">SMART ENTRANCE GATEWAY</span>
+            <h1>Mess QR Check-In</h1>
+            <p class="subtitle">Scan the printed code at the mess counter or confirm your arrival below</p>
+        </div>
+
+        {% if meal %}
+            <!-- Active Meal Check-In Card -->
+            <div class="card scan-card" id="scanCardContainer">
+                <div class="scan-card-top">
+                    <div class="meal-badge-pill">{{ meal.meal_name }} is Active</div>
+                    <div class="meal-time-window">{{ meal.standard_start_time.strftime('%I:%M %p') }} – {{ meal.standard_end_time.strftime('%I:%M %p') }}</div>
+                </div>
+
+                <div class="dish-showcase">
+                    <span class="dish-label">TODAY'S SPECIAL DISH:</span>
+                    <h2 class="dish-name">{{ dish.dish_name if dish else 'Chef Special Daily Thali' }}</h2>
+                    <div class="dish-prep-chip">
+                        ⏱️ Expected Prep Speed: <strong>{{ dish.expected_prep_time_minutes if dish else 5 }} mins</strong>
+                    </div>
+                </div>
+
+                <!-- Live Capacity Meter -->
+                <div class="scan-crowd-meter">
+                    <div class="meter-header">
+                        <span>Live Dining Hall Load</span>
+                        <strong>{{ crowd_info.active_diners if crowd_info else 0 }} Diners Active</strong>
+                    </div>
+                    <div class="progress-bar-wrap">
+                        <div class="progress-bar-fill {% if crowd_info and crowd_info.capacity_utilization_pct > 75 %}fill-danger{% elif crowd_info and crowd_info.capacity_utilization_pct > 40 %}fill-warning{% else %}fill-success{% endif %}" 
+                             style="width: {{ crowd_info.capacity_utilization_pct if crowd_info else 5 }}%;"></div>
+                    </div>
+                </div>
+
+                <!-- State: Already Checked In vs Ready to Check In -->
+                {% if existing_visit %}
+                    <div class="confirmation-box checked-in-already">
+                        <div class="conf-icon">✅</div>
+                        <h3>Already Checked In</h3>
+                        <p>You have already validated your entrance for <strong>{{ meal.meal_name }}</strong> today.</p>
+                        <div class="conf-details-grid">
+                            <div><span>Swiped In:</span><strong>{{ format_time(existing_visit.mess_entry_time) }}</strong></div>
+                            <div><span>Predicted Exit:</span><strong>{{ format_time(existing_visit.mess_exit_time) }}</strong></div>
+                        </div>
+                        <small class="cooldown-note">Duplicate scan cooldown active to prevent double-billing.</small>
+                    </div>
+                {% else %}
+                    <div id="checkinActionArea">
+                        <button type="button" class="btn btn-primary btn-lg btn-block pulse-btn" id="btnConfirmCheckin">
+                            <span class="btn-icon">⚡</span> Tap to Confirm Entrance Swipe
+                        </button>
+                        <p class="scan-hint-text">Simulates phone scanning the hostel mess QR entrance placard</p>
+                    </div>
+
+                    <!-- Dynamic Post-Checkin Result Card (Populated by JS) -->
+                    <div id="checkinResultCard" class="confirmation-box hidden">
+                        <div class="conf-icon">🎉</div>
+                        <h3>Entrance Confirmed!</h3>
+                        <p id="resMealDish"></p>
+                        
+                        <div class="conf-details-grid">
+                            <div><span>Swiped In:</span><strong id="resEntryTime">—</strong></div>
+                            <div><span>Predicted Exit:</span><strong id="resExitTime" class="text-accent">—</strong></div>
+                            <div><span>Est. Duration:</span><strong id="resDuration">—</strong></div>
+                            <div><span>Hall Crowd:</span><strong id="resCrowd">—</strong></div>
+                        </div>
+
+                        <div class="formula-explainer">
+                            💡 <em>Exit time is computed in PostgreSQL:</em><br>
+                            <code>Exit Time = Entry + (Prep Time + Eating Time + Buffer)</code>
+                        </div>
+
+                        <div class="mt-3">
+                            <a href="{{ url_for('student_dashboard') }}" class="btn btn-outline btn-block">Back to Dashboard</a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+
+        {% else %}
+            <!-- Closed State Card -->
+            <div class="card scan-card closed-card text-center">
+                <div class="empty-icon">🌙</div>
+                <h2>Mess Gate is Currently Closed</h2>
+                <p>No active dining session at this hour.</p>
+
+                {% if next_meal %}
+                <div class="next-meal-card">
+                    <span class="next-label">UPCOMING MEAL:</span>
+                    <h3>{{ next_meal.meal_name }}</h3>
+                    <div class="next-hours">{{ next_meal.standard_start_time.strftime('%I:%M %p') }} – {{ next_meal.standard_end_time.strftime('%I:%M %p') }}</div>
+                </div>
+                {% endif %}
+
+                <!-- Debug Time Simulator -->
+                <div class="debug-simulator-box">
+                    <span>💡 <strong>Want to test the scanner now?</strong> Simulate meal hours:</span>
+                    <form action="{{ url_for('api_simulate_time') }}" method="POST" class="inline-form">
+                        <button type="submit" name="simulate_time" value="{{ ist_now.strftime('%Y-%m-%d') }}T08:15" class="btn btn-sm btn-outline">Simulate Breakfast (8:15 AM)</button>
+                        <button type="submit" name="simulate_time" value="{{ ist_now.strftime('%Y-%m-%d') }}T13:00" class="btn btn-sm btn-outline">Simulate Lunch (1:00 PM)</button>
+                        <button type="submit" name="simulate_time" value="{{ ist_now.strftime('%Y-%m-%d') }}T20:15" class="btn btn-sm btn-outline">Simulate Dinner (8:15 PM)</button>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+
+        <div class="back-link-wrap text-center">
+            <a href="{{ url_for('student_dashboard') }}">← Back to Student Dashboard</a>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btn = document.getElementById('btnConfirmCheckin');
+    if (!btn) return;
+
+    btn.addEventListener('click', async function() {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border"></span> Computing Exit Time in SQL...';
+
+        try {
+            const response = await fetch("{{ url_for('student_mess_checkin') }}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest"
+                }
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                // Hide action button
+                document.getElementById('checkinActionArea').classList.add('hidden');
+                
+                // Show result card
+                const resCard = document.getElementById('checkinResultCard');
+                resCard.classList.remove('hidden');
+
+                document.getElementById('resMealDish').innerHTML = `Enjoy your <strong>${data.dish_name}</strong> for ${data.meal_name}!`;
+                document.getElementById('resEntryTime').textContent = data.entry_time;
+                document.getElementById('resExitTime').textContent = data.predicted_exit_time;
+                document.getElementById('resDuration').textContent = `${data.estimated_duration_mins} mins`;
+                document.getElementById('resCrowd').textContent = `${data.live_crowd_diners} Diners (${data.crowd_level})`;
+
+            } else {
+                alert(data.error || data.message || "Check-in failed. Please retry.");
+                btn.disabled = false;
+                btn.innerHTML = '<span class="btn-icon">⚡</span> Tap to Confirm Entrance Swipe';
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Network error connecting to database pool.");
+            btn.disabled = false;
+            btn.innerHTML = '<span class="btn-icon">⚡</span> Tap to Confirm Entrance Swipe';
+        }
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Executive Analytics — HostelFlow{% endblock %}
+
+{% block content %}
+<div class="portal-container admin-dashboard">
+    
+    <div class="portal-header">
+        <div>
+            <h1>Executive Campus KPI Dashboard</h1>
+            <p class="subtitle">Real-time metrics, bottleneck analysis, and operational load for <strong>{{ session.get('college_name') }}</strong></p>
+        </div>
+        <div class="header-actions">
+            <a href="{{ url_for('admin_sql_inspector') }}" class="btn btn-primary badge-viva">🔍 Viva Mode (SQL Inspector)</a>
+        </div>
+    </div>
+
+    <!-- 5 Executive KPI Cards -->
+    <div class="dashboard-grid kpi-grid-5">
+        <div class="card kpi-card">
+            <div class="kpi-icon">🍽️</div>
+            <div class="kpi-number text-accent">{{ kpis.active_diners }}</div>
+            <div class="kpi-label">Active Diners Right Now</div>
+            <small class="kpi-sub">v_live_mess_crowd</small>
+        </div>
+
+        <div class="card kpi-card">
+            <div class="kpi-icon">👣</div>
+            <div class="kpi-number">{{ kpis.today_footfall }}</div>
+            <div class="kpi-label">Today's Total Mess Swipes</div>
+            <small class="kpi-sub">MESS_VISIT count</small>
+        </div>
+
+        <div class="card kpi-card">
+            <div class="kpi-icon">⏱️</div>
+            <div class="kpi-number">{{ kpis.avg_stay_mins }}m</div>
+            <div class="kpi-label">Average Dining Duration</div>
+            <small class="kpi-sub">Past 7-day average</small>
+        </div>
+
+        <div class="card kpi-card">
+            <div class="kpi-icon">🧺</div>
+            <div class="kpi-number">{{ kpis.active_laundry_bags }}</div>
+            <div class="kpi-label">Active Laundry Bags</div>
+            <small class="kpi-sub">SUBMITTED + WASHING</small>
+        </div>
+
+        <div class="card kpi-card">
+            <div class="kpi-icon">⏳</div>
+            <div class="kpi-number">{{ kpis.avg_laundry_turnaround }}h</div>
+            <div class="kpi-label">Avg Laundry Turnaround</div>
+            <small class="kpi-sub">Intake to Collection</small>
+        </div>
+    </div>
+
+    <!-- Analytics Charts Row -->
+    <div class="grid-2-col mt-4">
+        
+        <!-- 15-Minute Slot Heatmap Card -->
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3>📊 Dining Rush Hours (15-Min Intervals)</h3>
+                    <small class="text-muted">Captured by v_mess_slot_analytics</small>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-wrapper">
+                    <canvas id="adminSlotChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dish Impact Analysis Table -->
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3>🍲 Dish Bottleneck Impact</h3>
+                    <small class="text-muted">High preparation time dishes vs. total stay duration</small>
+                </div>
+                <span class="badge badge-info">v_dish_impact</span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Dish Name</th>
+                                <th>Prep Speed</th>
+                                <th>Visits</th>
+                                <th>Avg Stay Duration</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for dish in dish_bottlenecks %}
+                            <tr>
+                                <td><strong>{{ dish.dish_name }}</strong></td>
+                                <td>{{ dish.expected_prep_time_minutes }} mins</td>
+                                <td>{{ dish.visit_count }}</td>
+                                <td>
+                                    <span class="duration-badge {% if dish.avg_duration_mins > 28 %}badge-danger{% elif dish.avg_duration_mins > 22 %}badge-warning{% else %}badge-success{% endif %}">
+                                        {{ dish.avg_duration_mins }} mins
+                                    </span>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-muted text-center">No dish impact data logged yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Quick Management Strip -->
+    <div class="features-grid mt-4">
+        <div class="feature-box">
+            <h4>🍽️ Weekly Mess Menu</h4>
+            <p>Modify daily dishes, timings, and tune expected prep time minutes.</p>
+            <a href="{{ url_for('admin_menu') }}" class="btn btn-outline btn-sm mt-2">Manage Menu & Prep Speeds →</a>
+        </div>
+
+        <div class="feature-box">
+            <h4>👥 Student Directory & Bulk Upload</h4>
+            <p>Onboard students, link permanent 1:1 laundry bags, or upload complete rosters via CSV.</p>
+            <a href="{{ url_for('admin_students') }}" class="btn btn-outline btn-sm mt-2">Manage Students & Bags →</a>
+        </div>
+
+        <div class="feature-box">
+            <h4>🔍 SQL Inspector ("Viva Mode")</h4>
+            <p>Inspect the exact PostgreSQL Views, Triggers, and query outputs driving this dashboard.</p>
+            <a href="{{ url_for('admin_sql_inspector') }}" class="btn btn-outline btn-sm mt-2">Open SQL Inspector →</a>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const res = await fetch("{{ url_for('api_student_crowd_slots') }}");
+        const data = await res.json();
+
+        const ctx = document.getElementById('adminSlotChart').getContext('2d');
+        const labels = data.slots.map(s => s.slot_label);
+        const values = data.slots.map(s => s.total_visits);
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Total Student Entries',
+                    data: values,
+                    borderColor: '#4F46E5',
+                    backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                    fill: true,
+                    tension: 0.35,
+                    pointBackgroundColor: '#4F46E5',
+                    pointRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, grid: { color: 'rgba(226, 232, 240, 0.6)' } },
+                    x: { grid: { display: false } }
+                }
+            }
+        });
+    } catch (e) {
+        console.error("Error loading admin chart:", e);
+    }
+});
+</script>
+{% endblock %}

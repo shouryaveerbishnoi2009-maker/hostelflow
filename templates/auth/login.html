@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Sign In — HostelFlow{% endblock %}
+
+{% block content %}
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-header">
+            <span class="brand-icon">⚡</span>
+            <h2>Sign in to HostelFlow</h2>
+            <p>Access your student, staff, or university administrator portal</p>
+        </div>
+
+        <!-- Tab Selector for quick role context -->
+        <div class="auth-tabs" id="authTabs">
+            <button type="button" class="tab-btn active" onclick="switchLoginRole('student')">Student</button>
+            <button type="button" class="tab-btn" onclick="switchLoginRole('staff')">Mess / Laundry</button>
+            <button type="button" class="tab-btn" onclick="switchLoginRole('admin')">Hostel Admin</button>
+            <button type="button" class="tab-btn" onclick="switchLoginRole('super')">Super Admin</button>
+        </div>
+
+        <form action="{{ url_for('login') }}" method="POST" class="auth-form" id="loginForm">
+            <div class="form-group">
+                <label for="emailInput" class="form-label">Email Address</label>
+                <input type="email" id="emailInput" name="email" class="form-control" placeholder="name@college.edu" required autofocus value="student@jlu.edu">
+            </div>
+
+            <div class="form-group">
+                <div class="form-label-row">
+                    <label for="passwordInput" class="form-label">Password</label>
+                    <span class="hint-text" id="passHint">Default: Student@123</span>
+                </div>
+                <input type="password" id="passwordInput" name="password" class="form-control" placeholder="••••••••" required value="Student@123">
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block btn-lg">Sign In to Dashboard</button>
+        </form>
+
+        <div class="demo-helpers">
+            <span class="demo-hint-title">⚡ Quick 1-Click Fill:</span>
+            <div class="demo-chips">
+                <button type="button" class="chip" onclick="fillCreds('student@jlu.edu', 'Student@123', 'student')">Student Demo</button>
+                <button type="button" class="chip" onclick="fillCreds('laundry@jlu.edu', 'Staff@123', 'staff')">Laundry Staff</button>
+                <button type="button" class="chip" onclick="fillCreds('admin@jlu.edu', 'Admin@123', 'admin')">Hostel Admin</button>
+                <button type="button" class="chip" onclick="fillCreds('admin@hostelflow.com', 'Admin@123', 'super')">Super Admin</button>
+            </div>
+        </div>
+
+        <div class="auth-footer">
+            <a href="{{ url_for('index') }}">← Back to Public Product Overview</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function fillCreds(email, password, role) {
+    document.getElementById('emailInput').value = email;
+    document.getElementById('passwordInput').value = password;
+    switchLoginRole(role);
+}
+
+function switchLoginRole(role) {
+    const tabs = document.querySelectorAll('#authTabs .tab-btn');
+    tabs.forEach(t => t.classList.remove('active'));
+
+    const hint = document.getElementById('passHint');
+    const emailField = document.getElementById('emailInput');
+    const passField = document.getElementById('passwordInput');
+
+    if (role === 'student') {
+        tabs[0].classList.add('active');
+        emailField.value = 'student@jlu.edu';
+        passField.value = 'Student@123';
+        hint.textContent = 'Default: Student@123';
+    } else if (role === 'staff') {
+        tabs[1].classList.add('active');
+        emailField.value = 'laundry@jlu.edu';
+        passField.value = 'Staff@123';
+        hint.textContent = 'Default: Staff@123';
+    } else if (role === 'admin') {
+        tabs[2].classList.add('active');
+        emailField.value = 'admin@jlu.edu';
+        passField.value = 'Admin@123';
+        hint.textContent = 'Default: Admin@123';
+    } else if (role === 'super') {
+        tabs[3].classList.add('active');
+        emailField.value = 'admin@hostelflow.com';
+        passField.value = 'Admin@123';
+        hint.textContent = 'Default: Admin@123';
+    }
+}
+</script>
+{% endblock %}

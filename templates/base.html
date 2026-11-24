@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}HostelFlow{% endblock %} — Smart Hostel Time & Crowd Management</title>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Core Stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand-group">
+                <a href="{{ url_for('index') }}" class="brand-logo">
+                    <span class="brand-icon">⚡</span>
+                    <span class="brand-text">Hostel<span class="brand-accent">Flow</span></span>
+                </a>
+                {% if session.get('college_name') %}
+                <span class="college-badge" title="Active Campus">{{ session.get('college_code') or session.get('college_name') }}</span>
+                {% endif %}
+            </div>
+
+            <nav class="nav-menu" id="navMenu">
+                {% if session.get('user_id') %}
+                    {% if session.get('role') == 'STUDENT' %}
+                        <a href="{{ url_for('student_dashboard') }}" class="nav-link {% if request.path == '/student/dashboard' %}active{% endif %}">Dashboard</a>
+                        <a href="{{ url_for('student_mess_scan') }}" class="nav-link {% if request.path == '/student/mess/scan' %}active{% endif %}">Mess Check-In</a>
+                        <a href="{{ url_for('student_crowd') }}" class="nav-link {% if request.path == '/student/crowd' %}active{% endif %}">Crowd Predictor</a>
+                        <a href="{{ url_for('student_laundry') }}" class="nav-link {% if request.path == '/student/laundry' %}active{% endif %}">Laundry Tracker</a>
+                    {% elif session.get('role') in ('MESS_STAFF', 'LAUNDRY_STAFF') %}
+                        <a href="{{ url_for('staff_dashboard') }}" class="nav-link {% if request.path == '/staff/dashboard' %}active{% endif %}">Overview</a>
+                        <a href="{{ url_for('staff_laundry') }}" class="nav-link {% if request.path == '/staff/laundry' %}active{% endif %}">Laundry Desk</a>
+                        <a href="{{ url_for('staff_mess_qr') }}" class="nav-link {% if request.path == '/staff/mess/qr' %}active{% endif %}">Mess QR Display</a>
+                    {% elif session.get('role') == 'HOSTEL_ADMIN' %}
+                        <a href="{{ url_for('admin_dashboard') }}" class="nav-link {% if request.path == '/admin/dashboard' %}active{% endif %}">Analytics</a>
+                        <a href="{{ url_for('admin_menu') }}" class="nav-link {% if request.path == '/admin/menu' %}active{% endif %}">Menu Management</a>
+                        <a href="{{ url_for('admin_students') }}" class="nav-link {% if request.path == '/admin/students' %}active{% endif %}">Students & Bags</a>
+                        <a href="{{ url_for('staff_laundry') }}" class="nav-link {% if request.path == '/staff/laundry' %}active{% endif %}">Laundry Desk</a>
+                        <a href="{{ url_for('admin_sql_inspector') }}" class="nav-link badge-viva {% if request.path == '/admin/sql-inspector' %}active{% endif %}">SQL Inspector</a>
+                    {% elif session.get('role') == 'SUPER_ADMIN' %}
+                        <a href="{{ url_for('superadmin_dashboard') }}" class="nav-link {% if request.path == '/superadmin/dashboard' %}active{% endif %}">SaaS Hub</a>
+                        <a href="{{ url_for('superadmin_colleges') }}" class="nav-link {% if request.path == '/superadmin/colleges' %}active{% endif %}">Universities</a>
+                        <a href="{{ url_for('admin_dashboard') }}" class="nav-link {% if request.path == '/admin/dashboard' %}active{% endif %}">Campus Analytics</a>
+                        <a href="{{ url_for('admin_sql_inspector') }}" class="nav-link badge-viva {% if request.path == '/admin/sql-inspector' %}active{% endif %}">SQL Inspector</a>
+                    {% endif %}
+                {% else %}
+                    <a href="{{ url_for('index') }}#features" class="nav-link">Features</a>
+                    <a href="{{ url_for('index') }}#architecture" class="nav-link">Architecture</a>
+                    <a href="{{ url_for('index') }}#demo" class="nav-link">Demo Logins</a>
+                {% endif %}
+            </nav>
+
+            <div class="header-actions">
+                <!-- Time & Clock Status -->
+                <div class="time-pill" title="Indian Standard Time (IST)">
+                    <span class="status-dot"></span>
+                    <span class="time-label">{{ ist_time_str }} IST</span>
+                </div>
+
+                {% if session.get('user_id') %}
+                <div class="user-dropdown">
+                    <button class="user-btn" id="userMenuBtn">
+                        <span class="user-avatar">{{ session.get('name', 'U')[0] }}</span>
+                        <span class="user-info">
+                            <span class="user-name">{{ session.get('name') }}</span>
+                            <span class="user-role">{{ session.get('role').replace('_', ' ') }}</span>
+                        </span>
+                    </button>
+                    <div class="user-menu" id="userDropdownMenu">
+                        <div class="menu-header">
+                            <strong>{{ session.get('name') }}</strong>
+                            <small>{{ session.get('email') }}</small>
+                        </div>
+                        <div class="menu-divider"></div>
+                        <a href="{{ url_for('dashboard_router') }}" class="menu-item">Dashboard</a>
+                        {% if session.get('role') in ('SUPER_ADMIN', 'HOSTEL_ADMIN') %}
+                        <a href="{{ url_for('admin_sql_inspector') }}" class="menu-item">SQL Viva Inspector</a>
+                        {% endif %}
+                        <div class="menu-divider"></div>
+                        <a href="{{ url_for('logout') }}" class="menu-item text-danger">Sign Out</a>
+                    </div>
+                </div>
+                {% else %}
+                <a href="{{ url_for('login') }}" class="btn btn-primary btn-sm">Sign In</a>
+                {% endif %}
+
+                <!-- Mobile Hamburger Toggle -->
+                <button class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle navigation">
+                    <span></span><span></span><span></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Simulated Time Warning Banner (If active) -->
+    {% if simulate_time %}
+    <div class="simulation-banner">
+        <div class="simulation-content">
+            <span>⏱️ <strong>DEBUG MODE:</strong> Simulating clock at <strong>{{ simulate_time }} IST</strong>. Meal detection & exit calculations evaluate against this time.</span>
+            <form action="{{ url_for('api_simulate_time') }}" method="POST" style="display:inline; margin-left: 10px;">
+                <input type="hidden" name="simulate_time" value="">
+                <button type="submit" class="btn btn-sm btn-outline-light">Reset to Real Time</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Flash Messages -->
+    <div class="flash-wrapper" id="flashWrapper">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible" role="alert">
+                    <span class="alert-text">{{ message }}</span>
+                    <button type="button" class="close-alert" onclick="this.parentElement.remove();">&times;</button>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
+
+    <!-- Main Dynamic Content -->
+    <main class="main-viewport">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Global Application Footer -->
+    <footer class="app-footer">
+        <div class="footer-container">
+            <div class="footer-brand">
+                <span class="brand-icon">⚡</span>
+                <strong>HostelFlow</strong> — Smart Hostel Time & Crowd Management System
+            </div>
+            <div class="footer-meta">
+                <span>Database-First: PostgreSQL + Supabase + Render</span>
+                <span>•</span>
+                <span>Active Server Time: {{ ist_date_str }}</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Core Script -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

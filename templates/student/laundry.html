@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Laundry Queue Tracker — HostelFlow{% endblock %}
+
+{% block content %}
+<div class="portal-container laundry-page">
+    
+    <div class="portal-header">
+        <div>
+            <h1>Live Laundry Queue Tracker</h1>
+            <p class="subtitle">Strict 1:1 permanent bag assignment with automated state progression & turnaround estimates</p>
+        </div>
+        {% if bag %}
+        <div class="permanent-bag-badge">
+            <span class="bag-title">REGISTERED BAG</span>
+            <strong class="bag-number">{{ bag.bag_number }}</strong>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if bag %}
+        <!-- Active Request Status Tracker -->
+        <div class="card stepper-card">
+            <div class="card-header">
+                <h3>🧺 Current Laundry Request</h3>
+                {% if active_request %}
+                <span class="badge badge-warning">IN PROCESS</span>
+                {% else %}
+                <span class="badge badge-success">ALL CLEAR</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if active_request %}
+                    <!-- 4-Stage Stepper -->
+                    <div class="stepper-wrapper">
+                        {% set stages = ['SUBMITTED', 'WASHING', 'READY', 'COLLECTED'] %}
+                        
+                        <div class="step-item {% if active_request.status in ('SUBMITTED', 'WASHING', 'READY', 'COLLECTED') %}completed{% endif %} {% if active_request.status == 'SUBMITTED' %}active{% endif %}">
+                            <div class="step-circle">1</div>
+                            <div class="step-label">Submitted</div>
+                            <small class="step-time">{{ format_time(active_request.submitted_datetime) }}</small>
+                        </div>
+
+                        <div class="step-line {% if active_request.status in ('WASHING', 'READY', 'COLLECTED') %}completed{% endif %}"></div>
+
+                        <div class="step-item {% if active_request.status in ('WASHING', 'READY', 'COLLECTED') %}completed{% endif %} {% if active_request.status == 'WASHING' %}active{% endif %}">
+                            <div class="step-circle">2</div>
+                            <div class="step-label">In Washing</div>
+                            <small class="step-time">Washing & Drying</small>
+                        </div>
+
+                        <div class="step-line {% if active_request.status in ('READY', 'COLLECTED') %}completed{% endif %}"></div>
+
+                        <div class="step-item {% if active_request.status in ('READY', 'COLLECTED') %}completed{% endif %} {% if active_request.status == 'READY' %}active{% endif %}">
+                            <div class="step-circle">3</div>
+                            <div class="step-label">Ready for Pickup</div>
+                            <small class="step-time">At Laundry Desk</small>
+                        </div>
+
+                        <div class="step-line {% if active_request.status == 'COLLECTED' %}completed{% endif %}"></div>
+
+                        <div class="step-item {% if active_request.status == 'COLLECTED' %}completed active{% endif %}">
+                            <div class="step-circle">4</div>
+                            <div class="step-label">Collected</div>
+                            <small class="step-time">Done</small>
+                        </div>
+                    </div>
+
+                    <!-- Live Queue Position Box -->
+                    <div class="laundry-eta-grid">
+                        <div class="eta-box">
+                            <span class="eta-label">BAGS AHEAD IN QUEUE</span>
+                            <div class="eta-value">{{ remaining_ahead }}</div>
+                            <small class="eta-sub">Point-in-time intake snapshot was {{ active_request.bags_ahead_at_submission }} bags ahead</small>
+                        </div>
+
+                        <div class="eta-box">
+                            <span class="eta-label">PROJECTED RETURN TIME</span>
+                            <div class="eta-value text-accent">{{ format_ist(active_request.expected_return_datetime) }}</div>
+                            <small class="eta-sub">Computed using historical machine cycle velocity</small>
+                        </div>
+                    </div>
+
+                    {% if active_request.status == 'READY' %}
+                    <div class="ready-pickup-banner">
+                        <span>🎉 <strong>Your clothes are clean, folded, and ready for collection!</strong> Please bring your student ID to the laundry counter.</span>
+                    </div>
+                    {% endif %}
+
+                {% else %}
+                    <div class="empty-state text-center" style="padding: 30px 0;">
+                        <div class="empty-icon">✨</div>
+                        <h3>No Active Bags in Queue</h3>
+                        <p>Drop your bag at the hostel laundry desk anytime during operational hours.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Historical Laundry Log Table -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3>📜 Laundry Turnaround History</h3>
+                <span class="badge badge-secondary">{{ history|length }} Total Records</span>
+            </div>
+            <div class="card-body">
+                {% if history %}
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Request ID</th>
+                                <th>Submitted Date</th>
+                                <th>Bags Ahead (Snapshot)</th>
+                                <th>Predicted Return</th>
+                                <th>Actual Collection</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for req in history %}
+                            <tr>
+                                <td>#{{ req.request_id }}</td>
+                                <td>{{ format_ist(req.submitted_datetime) }}</td>
+                                <td>{{ req.bags_ahead_at_submission }}</td>
+                                <td>{{ format_ist(req.expected_return_datetime) }}</td>
+                                <td>
+                                    {% if req.actual_received_datetime %}
+                                        {{ format_ist(req.actual_received_datetime) }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge status-{{ req.status }}">{{ req.status }}</span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted text-center" style="padding: 20px 0;">No past laundry requests found.</p>
+                {% endif %}
+            </div>
+        </div>
+
+    {% else %}
+        <!-- Unregistered Bag State -->
+        <div class="card text-center" style="padding: 60px 20px;">
+            <div class="empty-icon">🎒</div>
+            <h2>No Permanent Bag Assigned</h2>
+            <p>Your student profile has not yet been bound to a physical barcode laundry bag.</p>
+            <p class="text-muted">Please visit the hostel administrative desk or ask the laundry operator to register your permanent bag number.</p>
+        </div>
+    {% endif %}
+
+</div>
+{% endblock %}

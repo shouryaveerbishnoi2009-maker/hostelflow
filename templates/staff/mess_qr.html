@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Mess Entrance QR Generator — HostelFlow{% endblock %}
+
+{% block content %}
+<div class="portal-container qr-page">
+    
+    <div class="portal-header">
+        <div>
+            <h1>Mess Entrance QR Display Generator</h1>
+            <p class="subtitle">Generate high-resolution printable or kiosk displays for dining hall counters</p>
+        </div>
+        <div class="header-actions">
+            <button type="button" class="btn btn-primary" onclick="window.print()">🖨️ Print Entrance Sign</button>
+        </div>
+    </div>
+
+    <div class="grid-2-col qr-grid">
+        
+        <!-- Hostel Selector Controls -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Select Hostel Dining Hall</h3>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('staff_mess_qr') }}" method="GET">
+                    <div class="form-group">
+                        <label for="hostelSelect" class="form-label">Hostel Dining Facility</label>
+                        <select name="hostel_id" id="hostelSelect" class="form-control" onchange="this.form.submit()">
+                            {% for h in hostels %}
+                            <option value="{{ h.hostel_id }}" {% if selected_hostel and selected_hostel.hostel_id == h.hostel_id %}selected{% endif %}>
+                                {{ h.hostel_name }} (Capacity: {{ h.capacity }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+
+                <div class="qr-info-note">
+                    <h4>How Entrance Check-In Works:</h4>
+                    <ol>
+                        <li>Print this QR display sheet and position it near the dining hall turnstile.</li>
+                        <li>Students open the camera on their phones or browse directly to scan the code.</li>
+                        <li>PostgreSQL validates current meal window, dish prep speed, and computes their expected exit time immediately.</li>
+                    </ol>
+                </div>
+
+                <div class="mt-4">
+                    <span class="label-text">Direct Scan URL:</span>
+                    <input type="text" class="form-control form-control-sm" value="{{ scan_url }}" readonly onclick="this.select()">
+                </div>
+            </div>
+        </div>
+
+        <!-- Printable Sign Board -->
+        <div class="printable-sign-board" id="printableSign">
+            <div class="sign-header">
+                <div class="sign-brand">⚡ HostelFlow</div>
+                <div class="sign-campus">{{ session.get('college_name') }}</div>
+            </div>
+
+            <div class="sign-hostel-title">
+                <h2>{{ selected_hostel.hostel_name if selected_hostel else 'Hostel Dining Hall' }}</h2>
+                <p>SMART MESS ENTRANCE SWIPE</p>
+            </div>
+
+            <div class="qr-frame">
+                {% if qr_b64 %}
+                <img src="data:image/png;base64,{{ qr_b64 }}" alt="Mess Check-In QR" class="qr-image">
+                {% else %}
+                <div class="qr-placeholder">QR Code Generating...</div>
+                {% endif %}
+            </div>
+
+            <div class="sign-instructions">
+                <strong>SCAN WITH PHONE TO CHECK IN</strong>
+                <p>1. Open Camera or Scanner ➔ 2. Tap Link ➔ 3. Confirm Entrance</p>
+                <small class="scan-url-sub">{{ scan_url }}</small>
+            </div>
+
+            <div class="sign-footer">
+                <span>Real-Time Exit Time Estimation Powered by PostgreSQL</span>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+{% endblock %}

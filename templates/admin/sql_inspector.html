@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}SQL Inspector ("Viva Mode") — HostelFlow{% endblock %}
+
+{% block content %}
+<div class="portal-container viva-page">
+    
+    <div class="portal-header">
+        <div>
+            <div class="viva-pill">🎓 ACADEMIC EVALUATION & ARCHITECTURE TRANSPARENCY</div>
+            <h1>SQL Inspector ("Viva Mode")</h1>
+            <p class="subtitle">Live verification proving business intelligence is computed directly by PostgreSQL Views & Triggers</p>
+        </div>
+        <div class="header-actions">
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline btn-sm">← Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div class="viva-explainer-banner">
+        <strong>Why Viva Mode?</strong> Traditional web frameworks obscure business logic inside heavy ORMs (Django, SQLAlchemy), generating un-inspectable, slow queries. HostelFlow adheres to the <em>"Capture Once, Compute the Rest in SQL"</em> design philosophy. Below are the exact raw PostgreSQL queries and live results executing on your database cluster right now.
+    </div>
+
+    <!-- Query Loop -->
+    <div class="viva-queries-stack">
+        {% for q_key, q_val in inspect_queries.items() %}
+        <div class="card query-inspect-card">
+            <div class="card-header">
+                <div>
+                    <h3>{{ q_val.title }}</h3>
+                    <small class="text-muted">{{ q_val.description }}</small>
+                </div>
+                <span class="badge badge-info">{{ q_val.data|length }} Rows Returned</span>
+            </div>
+            
+            <div class="card-body">
+                <!-- SQL Code Block -->
+                <div class="code-terminal mb-3">
+                    <div class="terminal-header">
+                        <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                        <span class="terminal-title">PostgreSQL Query Definition</span>
+                    </div>
+                    <pre class="terminal-body"><code>{{ q_val.sql }}</code></pre>
+                </div>
+
+                <!-- Live Results Table -->
+                <div class="results-table-wrap">
+                    <span class="results-title">⚡ Live Engine Execution Results:</span>
+                    {% if q_val.data %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    {% for col in q_val.data[0].keys() %}
+                                    <th>{{ col }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in q_val.data %}
+                                <tr>
+                                    {% for val in row.values() %}
+                                    <td>{{ val if val is not none else '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted text-center" style="padding: 10px 0;">Query executed cleanly. No rows returned for current filter parameters.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+</div>
+{% endblock %}

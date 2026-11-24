@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block title %}Smart Crowd Predictor & Menu — HostelFlow{% endblock %}
+
+{% block content %}
+<div class="portal-container crowd-page">
+    
+    <div class="portal-header">
+        <div>
+            <h1>Smart Crowd Predictor & Best-Time Engine</h1>
+            <p class="subtitle">15-minute analytical intervals captured by PostgreSQL to minimize dining queue times</p>
+        </div>
+        <div class="meal-toggle-pills" id="mealSelector">
+            {% for m in meals %}
+            <button type="button" class="btn btn-outline meal-filter-btn {% if loop.first %}active{% endif %}" data-meal-id="{{ m.meal_id }}">
+                {{ m.meal_name }}
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Smart Recommendation Banner -->
+    <div class="recommendation-banner" id="recommendationBanner">
+        <div class="rec-icon">💡</div>
+        <div class="rec-content">
+            <h4 class="rec-title">Live Crowd Recommendation</h4>
+            <p class="rec-text" id="recommendationText">Loading historical visit distribution...</p>
+        </div>
+    </div>
+
+    <!-- Chart Card -->
+    <div class="card chart-card">
+        <div class="card-header">
+            <h3>📊 15-Minute Slot Historical Crowd Curve</h3>
+            <span class="badge badge-info">v_mess_slot_analytics</span>
+        </div>
+        <div class="card-body">
+            <div class="chart-wrapper">
+                <canvas id="crowdHistogramChart" height="260"></canvas>
+            </div>
+            <div class="chart-legend-explain">
+                <small>• <strong>Green Bar:</strong> Recommended off-peak slot (lowest average queue).</small>
+                <small>• <strong>Red Bar:</strong> Historical peak rush hour (expect higher wait times).</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7-Day Weekly Menu Viewer -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <div>
+                <h3>🍽️ 7-Day Weekly Mess Menu & Prep Speeds</h3>
+                <small class="text-muted">High-prep dishes impact overall dining hall duration</small>
+            </div>
+            <span class="badge badge-primary">Current Day: {{ current_day }}</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table menu-table">
+                    <thead>
+                        <tr>
+                            <th>Day</th>
+                            <th>Meal</th>
+                            <th>Dish Served</th>
+                            <th>Expected Prep Time</th>
+                            <th>Speed Category</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in menu_items %}
+                        <tr class="{% if item.day_of_week == current_day %}highlight-row{% endif %}">
+                            <td>
+                                <strong>{{ item.day_of_week }}</strong>
+                                {% if item.day_of_week == current_day %}
+                                <span class="today-pill">TODAY</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ item.meal_name }}</td>
+                            <td><strong>{{ item.dish_name }}</strong></td>
+                            <td>{{ item.expected_prep_time_minutes }} mins</td>
+                            <td>
+                                <span class="badge badge-{{ item.speed_badge }}">{{ item.speed_label }}</span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let crowdChart = null;
+    const ctx = document.getElementById('crowdHistogramChart').getContext('2d');
+
+    async function loadSlotData(mealId) {
+        try {
+            const url = mealId ? `{{ url_for('api_student_crowd_slots') }}?meal_id=${mealId}` : `{{ url_for('api_student_crowd_slots') }}`;
+            const res = await fetch(url);
+            const data = await res.json();
+
+            // Update plain language text
+            document.getElementById('recommendationText').textContent = data.recommendation;
+
+            const labels = data.slots.map(s => s.slot_label);
+            const counts = data.slots.map(s => s.total_visits);
+
+            // Compute peak and lowest
+            let maxVal = -1;
+            let minVal = 999999;
+            counts.forEach(c => {
+                if (c > maxVal) maxVal = c;
+                if (c < minVal) minVal = c;
+            });
+
+            const backgroundColors = counts.map(c => {
+                if (c === maxVal) return 'rgba(239, 68, 68, 0.85)'; // Red for peak
+                if (c === minVal) return 'rgba(16, 185, 129, 0.85)'; // Green for best
+                return 'rgba(79, 70, 229, 0.7)'; // Default Indigo
+            });
+
+            if (crowdChart) {
+                crowdChart.destroy();
+            }
+
+            crowdChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Historical Student Footfall',
+                        data: counts,
+                        backgroundColor: backgroundColors,
+                        borderRadius: 6,
+                        borderSkipped: false,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.raw} Students Visited`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(226, 232, 240, 0.6)' },
+                            ticks: { precision: 0 }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+
+        } catch (err) {
+            console.error('Error fetching crowd slot data:', err);
+        }
+    }
+
+    // Attach button listeners
+    const buttons = document.querySelectorAll('.meal-filter-btn');
+    buttons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            buttons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            loadSlotData(this.dataset.mealId);
+        });
+    });
+
+    // Initial load for first meal
+    if (buttons.length > 0) {
+        loadSlotData(buttons[0].dataset.mealId);
+    } else {
+        loadSlotData(null);
+    }
+});
+</script>
+{% endblock %}

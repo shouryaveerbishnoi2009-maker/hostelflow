@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Operations Dashboard — HostelFlow{% endblock %}
+
+{% block content %}
+<div class="portal-container staff-page">
+    
+    <div class="portal-header">
+        <div>
+            <h1>Hostel Operations Console</h1>
+            <p class="subtitle">Operational gateway for mess staff and laundry attendants • Role: <strong>{{ staff_role }}</strong></p>
+        </div>
+        <div class="header-action-cards">
+            <a href="{{ url_for('staff_laundry') }}" class="quick-cta-card">
+                <span class="cta-icon">🧺</span>
+                <div class="cta-text">
+                    <strong>Laundry Desk</strong>
+                    <small>Intake & queue advancer</small>
+                </div>
+            </a>
+            <a href="{{ url_for('staff_mess_qr') }}" class="quick-cta-card">
+                <span class="cta-icon">📱</span>
+                <div class="cta-text">
+                    <strong>Mess Entrance QR</strong>
+                    <small>Print or project sign</small>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <!-- Operational KPI Row -->
+    <div class="dashboard-grid">
+        <div class="card kpi-card">
+            <div class="kpi-icon">🧺</div>
+            <div class="kpi-number">{{ laundry_summary.active_queue_total if laundry_summary else 0 }}</div>
+            <div class="kpi-label">Active Bags in Laundry Queue</div>
+        </div>
+
+        <div class="card kpi-card">
+            <div class="kpi-icon">🫧</div>
+            <div class="kpi-number">{{ laundry_summary.washing_count if laundry_summary else 0 }}</div>
+            <div class="kpi-label">Bags Currently Washing/Drying</div>
+        </div>
+
+        <div class="card kpi-card">
+            <div class="kpi-icon">🎁</div>
+            <div class="kpi-number">{{ laundry_summary.ready_count if laundry_summary else 0 }}</div>
+            <div class="kpi-label">Clean Bags Awaiting Pickup</div>
+        </div>
+
+        <div class="card kpi-card">
+            <div class="kpi-icon">⏱️</div>
+            <div class="kpi-number">{{ laundry_summary.avg_turnaround_hours if laundry_summary and laundry_summary.avg_turnaround_hours else 24 }}h</div>
+            <div class="kpi-label">Average Wash Cycle Turnaround</div>
+        </div>
+    </div>
+
+    <!-- Quick Navigation Cards -->
+    <div class="features-grid mt-4">
+        <div class="feature-box">
+            <div class="feature-icon-badge">🧺</div>
+            <h3>Manage Laundry Drop-Offs</h3>
+            <p>Scan incoming student bags, record intake point-in-time snapshots, and advance batches to WASHING or READY.</p>
+            <a href="{{ url_for('staff_laundry') }}" class="btn btn-primary btn-sm mt-3">Open Laundry Desk →</a>
+        </div>
+
+        <div class="feature-box">
+            <div class="feature-icon-badge">📱</div>
+            <h3>Display Dining Entrance QR</h3>
+            <p>Generate high-resolution printable or kiosk QR codes for hostel dining hall entrances so students can check in seamlessly.</p>
+            <a href="{{ url_for('staff_mess_qr') }}" class="btn btn-secondary btn-sm mt-3">Open QR Generator →</a>
+        </div>
+
+        <div class="feature-box">
+            <div class="feature-icon-badge">⏱️</div>
+            <h3>Time Simulation & Debugging</h3>
+            <p>Simulate Breakfast, Lunch, or Dinner timings to calibrate dining hall scanners outside physical meal hours.</p>
+            <form action="{{ url_for('api_simulate_time') }}" method="POST" class="mt-3">
+                <input type="datetime-local" name="simulate_time" class="form-control form-control-sm mb-2" value="{{ ist_now.strftime('%Y-%m-%dT%H:%M') }}">
+                <button type="submit" class="btn btn-outline btn-sm btn-block">Simulate Clock</button>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

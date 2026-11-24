@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Laundry Desk Console — HostelFlow{% endblock %}
+
+{% block content %}
+<div class="portal-container laundry-desk-page">
+    
+    <div class="portal-header">
+        <div>
+            <h1>Laundry Operations Desk</h1>
+            <p class="subtitle">Fast bag drop-off intake and single-click state machine progression</p>
+        </div>
+        <div class="header-actions">
+            <a href="{{ url_for('staff_dashboard') }}" class="btn btn-outline btn-sm">← Overview</a>
+        </div>
+    </div>
+
+    <!-- Drop-off Scanner & Active Queue Container -->
+    <div class="grid-2-col">
+        
+        <!-- Intake Card -->
+        <div class="card dropoff-card">
+            <div class="card-header">
+                <h3>📥 Quick Bag Drop-Off Intake</h3>
+                <span class="badge badge-primary">Bar / Roll Scanner</span>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('staff_laundry_dropoff') }}" method="POST" class="dropoff-form">
+                    <div class="form-group">
+                        <label for="identifierInput" class="form-label">Scan / Enter Bag Number or Student Roll No</label>
+                        <div class="input-action-row">
+                            <input type="text" id="identifierInput" name="identifier" class="form-control" placeholder="e.g. JLU-BAG-001 or JLU2024001" required autofocus autocomplete="off">
+                            <button type="submit" class="btn btn-primary">Check In Bag</button>
+                        </div>
+                        <small class="form-hint">Trigger computes queue snapshot and expected turnaround automatically.</small>
+                    </div>
+                </form>
+
+                <div class="scanner-shortcuts">
+                    <span class="shortcut-title">Sample Active Bags for Testing:</span>
+                    <div class="shortcut-chips">
+                        <button type="button" class="chip" onclick="document.getElementById('identifierInput').value='JLU-BAG-001'">JLU-BAG-001</button>
+                        <button type="button" class="chip" onclick="document.getElementById('identifierInput').value='JLU-BAG-002'">JLU-BAG-002</button>
+                        <button type="button" class="chip" onclick="document.getElementById('identifierInput').value='JLU2024005'">Roll: JLU2024005</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions Card -->
+        <div class="card instructions-card">
+            <div class="card-header">
+                <h3>⚙️ Operational State Flow</h3>
+                <span class="badge badge-secondary">SOP</span>
+            </div>
+            <div class="card-body">
+                <div class="sop-steps">
+                    <div class="sop-step">
+                        <span class="sop-num">1</span>
+                        <div><strong>SUBMITTED:</strong> Student drops bag. Database stores queue ahead count.</div>
+                    </div>
+                    <div class="sop-step">
+                        <span class="sop-num">2</span>
+                        <div><strong>WASHING:</strong> Operator loads clothes into washing & drying drums.</div>
+                    </div>
+                    <div class="sop-step">
+                        <span class="sop-num">3</span>
+                        <div><strong>READY:</strong> Clothes clean & folded on shelf. Student notified.</div>
+                    </div>
+                    <div class="sop-step">
+                        <span class="sop-num">4</span>
+                        <div><strong>COLLECTED:</strong> Student picks up bag. System records return timestamp.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Active Laundry Queue Table -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <div>
+                <h3>🧺 Active Laundry Queue</h3>
+                <small class="text-muted">Bags awaiting wash, drying, or student pickup</small>
+            </div>
+            <span class="badge badge-warning">{{ queue|length }} Bags in Processing</span>
+        </div>
+        <div class="card-body">
+            {% if queue %}
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Bag #</th>
+                            <th>Student & Hostel</th>
+                            <th>Submitted (IST)</th>
+                            <th>Snapshot Ahead</th>
+                            <th>Current Status</th>
+                            <th>Advance Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in queue %}
+                        <tr>
+                            <td>
+                                <strong class="bag-code-pill">{{ item.bag_number }}</strong>
+                            </td>
+                            <td>
+                                <strong>{{ item.student_name }}</strong>
+                                <small class="d-block text-muted">{{ item.roll_no }} • {{ item.hostel_name or 'Hostel' }} (Room {{ item.room_no or '—' }})</small>
+                            </td>
+                            <td>{{ format_ist(item.submitted_datetime) }}</td>
+                            <td>{{ item.bags_ahead_at_submission }} bags</td>
+                            <td>
+                                <span class="badge status-{{ item.status }}">{{ item.status }}</span>
+                            </td>
+                            <td>
+                                <form action="{{ url_for('staff_laundry_update_status') }}" method="POST" class="status-advance-form">
+                                    <input type="hidden" name="request_id" value="{{ item.request_id }}">
+                                    
+                                    {% if item.status == 'SUBMITTED' %}
+                                    <input type="hidden" name="status" value="WASHING">
+                                    <button type="submit" class="btn btn-sm btn-primary">Start Wash ➔</button>
+                                    
+                                    {% elif item.status == 'WASHING' %}
+                                    <input type="hidden" name="status" value="READY">
+                                    <button type="submit" class="btn btn-sm btn-success">Mark Ready ➔</button>
+                                    
+                                    {% elif item.status == 'READY' %}
+                                    <input type="hidden" name="status" value="COLLECTED">
+                                    <button type="submit" class="btn btn-sm btn-secondary">Handover (Collect) ➔</button>
+                                    {% endif %}
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state text-center" style="padding: 40px 0;">
+                <div class="empty-icon">✨</div>
+                <h3>All Laundry Bags Clean & Cleared</h3>
+                <p>No active laundry bags in the queue right now. Use the intake box above to check in a bag.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

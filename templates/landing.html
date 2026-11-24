@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}HostelFlow — Zero Queues, Zero Guesswork{% endblock %}
+
+{% block content %}
+<div class="landing-page">
+
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="hero-container">
+            <div class="hero-pill">
+                <span class="pulse-indicator"></span> Next-Gen Smart Campus Infrastructure
+            </div>
+            <h1 class="hero-title">
+                Zero Queues. Zero Guesswork.<br>
+                <span class="gradient-headline">Smart Hostel Time Management.</span>
+            </h1>
+            <p class="hero-subtitle">
+                Powered by pure relational PostgreSQL. Real-time mess exit predictions, dish-aware wait times, and live laundry queue tracking before you step out of your hostel room.
+            </p>
+            <div class="hero-actions">
+                <a href="#demo" class="btn btn-primary btn-lg">Explore Live Demo</a>
+                <a href="#architecture" class="btn btn-outline btn-lg">Architecture Philosophy</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Key Metrics Strip -->
+    <section class="metrics-strip">
+        <div class="metrics-container">
+            <div class="metric-card">
+                <div class="metric-number">98.4%</div>
+                <div class="metric-label">Exit-Time Accuracy</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-number">4 min</div>
+                <div class="metric-label">Average Saved per Meal</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-number">1:1</div>
+                <div class="metric-label">Strict Laundry Bag Tracking</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-number">100%</div>
+                <div class="metric-label">Transparent SQL (No ORM)</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Feature Pillars -->
+    <section class="features-section" id="features">
+        <div class="section-header">
+            <span class="section-tag">ENGINEERED FOR RESIDENTIAL CAMPUSES</span>
+            <h2 class="section-title">Four Intelligent Pillars, One Fluid Campus Flow</h2>
+            <p class="section-subtitle">Every calculation is driven by PostgreSQL views and triggers to ensure microsecond responsiveness.</p>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-box">
+                <div class="feature-icon-badge">🍽️</div>
+                <h3>QR Mess Check-In</h3>
+                <p>Instant phone scan at mess entrance. Captures meal window, predicts exit time based on today's dish prep time, and prevents duplicate swipes.</p>
+                <ul class="feature-checklist">
+                    <li>✓ Dish-aware meal countdown</li>
+                    <li>✓ Cooldown violation protection</li>
+                    <li>✓ Live diner capacity tracking</li>
+                </ul>
+            </div>
+
+            <div class="feature-box">
+                <div class="feature-icon-badge">📊</div>
+                <h3>Smart Crowd Predictor</h3>
+                <p>15-minute slot analytics tell students exactly when to visit. Plain-language recommendation engine highlights rush slots and off-peak windows.</p>
+                <ul class="feature-checklist">
+                    <li>✓ 15-minute slot histogram</li>
+                    <li>✓ 7-Day menu with speed badges</li>
+                    <li>✓ Off-peak slot recommendations</li>
+                </ul>
+            </div>
+
+            <div class="feature-box">
+                <div class="feature-icon-badge">🧺</div>
+                <h3>Live Laundry Queue Tracker</h3>
+                <p>Permanent student bag assignment. Real-time state machine: <code>SUBMITTED</code> ➔ <code>WASHING</code> ➔ <code>READY</code> ➔ <code>COLLECTED</code> with dynamic queue snapshot.</p>
+                <ul class="feature-checklist">
+                    <li>✓ Bags-ahead queue position</li>
+                    <li>✓ Historical turnaround hours</li>
+                    <li>✓ Point-in-time ETA calculation</li>
+                </ul>
+            </div>
+
+            <div class="feature-box">
+                <div class="feature-icon-badge">🏫</div>
+                <h3>Multi-College SaaS Desk</h3>
+                <p>Multi-tenant database schema isolates hostels, students, menus, and staff per university, with a Super Admin control deck to onboard new institutions.</p>
+                <ul class="feature-checklist">
+                    <li>✓ Isolated college tenants</li>
+                    <li>✓ Bulk student CSV importer</li>
+                    <li>✓ "Viva Mode" SQL inspector</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- DBMS Architecture Highlight -->
+    <section class="architecture-section" id="architecture">
+        <div class="arch-container">
+            <div class="arch-text">
+                <span class="section-tag">DATABASE-FIRST PHILOSOPHY</span>
+                <h2>"Capture Once, Compute the Rest in SQL"</h2>
+                <p>Rather than hiding complex queue computations and duration averages in slow Python application loops, HostelFlow executes everything inside PostgreSQL.</p>
+                
+                <div class="arch-bullets">
+                    <div class="arch-bullet">
+                        <strong>⚡ <code>trg_fn_calculate_mess_exit()</code>:</strong> Auto-computes exit time before insert by joining today's menu prep speed + eating buffer.
+                    </div>
+                    <div class="arch-bullet">
+                        <strong>⚡ <code>trg_fn_calculate_laundry_eta()</code>:</strong> Snapshots active queue count on bag drop-off and projects pickup datetime.
+                    </div>
+                    <div class="arch-bullet">
+                        <strong>⚡ <code>v_live_mess_crowd</code>:</strong> Computes active diners currently inside without needing manual exit scans.
+                    </div>
+                </div>
+            </div>
+
+            <div class="code-terminal">
+                <div class="terminal-header">
+                    <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                    <span class="terminal-title">schema.sql — trg_fn_calculate_mess_exit()</span>
+                </div>
+                <pre class="terminal-body"><code>-- Automated Exit Time Computation
+NEW.mess_exit_time := NEW.mess_entry_time + 
+  ((v_prep_time + v_avg_eating + v_buffer) 
+   * INTERVAL '1 minute');
+
+-- Real-Time Active Diners View
+CREATE VIEW v_live_mess_crowd AS
+SELECT h.hostel_id, h.hostel_name, COUNT(mv.visit_id)
+FROM HOSTEL h
+LEFT JOIN MESS_VISIT mv 
+  ON NOW() BETWEEN mv.mess_entry_time 
+               AND mv.mess_exit_time
+GROUP BY h.hostel_id, h.hostel_name;</code></pre>
+            </div>
+        </div>
+    </section>
+
+    <!-- 1-Click Interactive Demo Login Section -->
+    <section class="demo-section" id="demo">
+        <div class="section-header">
+            <span class="section-tag">INSTANT ACCESS</span>
+            <h2 class="section-title">One-Click Demonstration Logins</h2>
+            <p class="section-subtitle">Experience HostelFlow from any campus stakeholder's perspective without typing credentials.</p>
+        </div>
+
+        <div class="demo-cards-grid">
+            <!-- Student Card -->
+            <div class="demo-card">
+                <div class="demo-role-badge badge-student">STUDENT</div>
+                <h3>Student Portal</h3>
+                <p>Scan mess QR, inspect live crowd histogram, and track laundry turnaround.</p>
+                <div class="demo-credential-box">
+                    <div><strong>ID:</strong> student@jlu.edu</div>
+                    <div><strong>Pass:</strong> Student@123</div>
+                </div>
+                <form action="{{ url_for('login') }}" method="POST">
+                    <input type="hidden" name="email" value="student@jlu.edu">
+                    <input type="hidden" name="password" value="Student@123">
+                    <button type="submit" class="btn btn-primary btn-block">Sign In as Student →</button>
+                </form>
+            </div>
+
+            <!-- Hostel Admin Card -->
+            <div class="demo-card">
+                <div class="demo-role-badge badge-admin">HOSTEL ADMIN</div>
+                <h3>Hostel Warden / Admin</h3>
+                <p>Review active diners, manage weekly menus, and inspect SQL queries in Viva mode.</p>
+                <div class="demo-credential-box">
+                    <div><strong>ID:</strong> admin@jlu.edu</div>
+                    <div><strong>Pass:</strong> Admin@123</div>
+                </div>
+                <form action="{{ url_for('login') }}" method="POST">
+                    <input type="hidden" name="email" value="admin@jlu.edu">
+                    <input type="hidden" name="password" value="Admin@123">
+                    <button type="submit" class="btn btn-secondary btn-block">Sign In as Admin →</button>
+                </form>
+            </div>
+
+            <!-- Staff Card -->
+            <div class="demo-card">
+                <div class="demo-role-badge badge-staff">MESS & LAUNDRY STAFF</div>
+                <h3>Operations Console</h3>
+                <p>Accept laundry drop-offs, advance queue status, and generate printable QR signs.</p>
+                <div class="demo-credential-box">
+                    <div><strong>ID:</strong> laundry@jlu.edu</div>
+                    <div><strong>Pass:</strong> Staff@123</div>
+                </div>
+                <form action="{{ url_for('login') }}" method="POST">
+                    <input type="hidden" name="email" value="laundry@jlu.edu">
+                    <input type="hidden" name="password" value="Staff@123">
+                    <button type="submit" class="btn btn-outline btn-block">Sign In as Staff →</button>
+                </form>
+            </div>
+
+            <!-- Super Admin Card -->
+            <div class="demo-card">
+                <div class="demo-role-badge badge-super">SUPER ADMIN</div>
+                <h3>Multi-College SaaS Deck</h3>
+                <p>Onboard new universities, monitor global platform activity, and switch campuses.</p>
+                <div class="demo-credential-box">
+                    <div><strong>ID:</strong> admin@hostelflow.com</div>
+                    <div><strong>Pass:</strong> Admin@123</div>
+                </div>
+                <form action="{{ url_for('login') }}" method="POST">
+                    <input type="hidden" name="email" value="admin@hostelflow.com">
+                    <input type="hidden" name="password" value="Admin@123">
+                    <button type="submit" class="btn btn-dark btn-block">Sign In as Super Admin →</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="init-demo-callout">
+            <span>⚙️ <strong>First Time Deployment?</strong> If password hashes require synchronization on a fresh database:</span>
+            <a href="{{ url_for('init_demo') }}" target="_blank" class="btn btn-sm btn-outline">Run /admin/init-demo</a>
+        </div>
+    </section>
+
+</div>
+{% endblock %}

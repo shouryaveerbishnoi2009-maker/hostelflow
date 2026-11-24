@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Onboard Colleges — HostelFlow{% endblock %}
+
+{% block content %}
+<div class="portal-container colleges-page">
+    
+    <div class="portal-header">
+        <div>
+            <h1>University Onboarding & Tenant Management</h1>
+            <p class="subtitle">Add universities or toggle operational licenses on the shared cluster</p>
+        </div>
+        <div class="header-actions">
+            <a href="{{ url_for('superadmin_dashboard') }}" class="btn btn-outline btn-sm">← Back to SaaS Deck</a>
+        </div>
+    </div>
+
+    <div class="grid-2-col">
+        
+        <!-- Onboarding Form -->
+        <div class="card">
+            <div class="card-header">
+                <h3>➕ Onboard New University</h3>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('superadmin_colleges') }}" method="POST">
+                    <input type="hidden" name="action" value="create">
+
+                    <div class="form-group">
+                        <label class="form-label">Full University / College Name</label>
+                        <input type="text" name="college_name" class="form-control" placeholder="e.g. Birla Institute of Technology" required>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group col-6">
+                            <label class="form-label">Short Code (Unique)</label>
+                            <input type="text" name="college_code" class="form-control" placeholder="e.g. BITS" required>
+                        </div>
+                        <div class="form-group col-6">
+                            <label class="form-label">City</label>
+                            <input type="text" name="city" class="form-control" placeholder="e.g. Pilani">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Subscription Tier</label>
+                        <select name="subscription_plan" class="form-control">
+                            <option value="BASIC">BASIC (Up to 2 Hostels)</option>
+                            <option value="PRO">PRO (Up to 5 Hostels)</option>
+                            <option value="ENTERPRISE" selected>ENTERPRISE (Unlimited Multi-Hostel)</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block">Onboard University Tenant</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Multi-Tenancy Architecture Overview -->
+        <div class="card">
+            <div class="card-header">
+                <h3>🛡️ Shared Database Multi-Tenancy</h3>
+            </div>
+            <div class="card-body">
+                <p>HostelFlow uses strict foreign key cascading on <code>COLLEGE(college_id)</code>:</p>
+                <ul class="feature-checklist mt-3">
+                    <li>✓ <strong>Isolated Hostels:</strong> <code>HOSTEL.college_id</code></li>
+                    <li>✓ <strong>Isolated Students:</strong> <code>STUDENT.college_id</code></li>
+                    <li>✓ <strong>Isolated Meal Types & Menus:</strong> <code>MEAL_TYPE.college_id</code></li>
+                    <li>✓ <strong>Isolated Staff Logins:</strong> <code>STAFF_ADMIN.college_id</code></li>
+                </ul>
+                <p class="text-muted mt-3">When a Super Admin switches context to a college, all dashboard views, QR check-in flows, and analytics query strictly within that institution's scope.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Colleges Table -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h3>Registered Institutions</h3>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>City</th>
+                            <th>Plan</th>
+                            <th>Active Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for col in colleges %}
+                        <tr>
+                            <td>#{{ col.college_id }}</td>
+                            <td><strong class="bag-code-pill">{{ col.college_code }}</strong></td>
+                            <td><strong>{{ col.college_name }}</strong></td>
+                            <td>{{ col.city or '—' }}</td>
+                            <td><span class="badge badge-info">{{ col.subscription_plan }}</span></td>
+                            <td>
+                                {% if col.is_active %}
+                                <span class="badge badge-success">ACTIVE</span>
+                                {% else %}
+                                <span class="badge badge-danger">SUSPENDED</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <form action="{{ url_for('superadmin_colleges') }}" method="POST" style="display:inline;">
+                                    <input type="hidden" name="action" value="toggle_active">
+                                    <input type="hidden" name="college_id" value="{{ col.college_id }}">
+                                    <button type="submit" class="btn btn-sm btn-outline">
+                                        {% if col.is_active %}Suspend{% else %}Activate{% endif %}
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

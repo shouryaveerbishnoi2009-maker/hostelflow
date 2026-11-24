@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}System Error (500) — HostelFlow{% endblock %}
+
+{% block content %}
+<div class="error-container">
+    <div class="error-badge badge-danger">500 SERVER ERROR</div>
+    <h1 class="error-title">Something went wrong</h1>
+    <p class="error-desc">An unexpected error occurred while executing this query. Please check your database connection or try again.</p>
+    <a href="{{ url_for('dashboard_router') }}" class="btn btn-primary">Return to Dashboard</a>
+</div>
+{% endblock %}

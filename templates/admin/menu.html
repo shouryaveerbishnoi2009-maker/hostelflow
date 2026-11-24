@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Menu Management — HostelFlow{% endblock %}
+
+{% block content %}
+<div class="portal-container menu-admin-page">
+    
+    <div class="portal-header">
+        <div>
+            <h1>Weekly Mess Menu & Dish Prep Speeds</h1>
+            <p class="subtitle">Dish preparation speed directly influences dining exit time predictions in PostgreSQL</p>
+        </div>
+        <div class="header-actions">
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline btn-sm">← Analytics</a>
+        </div>
+    </div>
+
+    <div class="grid-2-col">
+        
+        <!-- Add Dish Form -->
+        <div class="card">
+            <div class="card-header">
+                <h3>➕ Add / Update Menu Dish</h3>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('admin_menu') }}" method="POST">
+                    <input type="hidden" name="action" value="add">
+                    
+                    <div class="form-group">
+                        <label for="mealIdSelect" class="form-label">Meal Window</label>
+                        <select name="meal_id" id="mealIdSelect" class="form-control" required>
+                            {% for m in meals %}
+                            <option value="{{ m.meal_id }}">{{ m.meal_name }} ({{ m.standard_start_time.strftime('%I:%M %p') }} – {{ m.standard_end_time.strftime('%I:%M %p') }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="daySelect" class="form-label">Day of Week</label>
+                        <select name="day_of_week" id="daySelect" class="form-control" required>
+                            <option value="Monday">Monday</option>
+                            <option value="Tuesday">Tuesday</option>
+                            <option value="Wednesday">Wednesday</option>
+                            <option value="Thursday">Thursday</option>
+                            <option value="Friday">Friday</option>
+                            <option value="Saturday">Saturday</option>
+                            <option value="Sunday">Sunday</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="dishNameInput" class="form-label">Dish Name & Description</label>
+                        <input type="text" id="dishNameInput" name="dish_name" class="form-control" placeholder="e.g. Masala Dosa with Sambar" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="prepTimeInput" class="form-label">Expected Prep / Replenishment Time (Minutes)</label>
+                        <input type="number" id="prepTimeInput" name="expected_prep_time_minutes" class="form-control" min="1" max="45" value="8" required>
+                        <small class="form-hint">E.g., 3 mins for Simple Dal-Roti vs. 15 mins for Made-to-Order Parathas.</small>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-block">Save to Weekly Menu</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Explanation Card -->
+        <div class="card">
+            <div class="card-header">
+                <h3>🧠 How Dish Prep Influences Crowd Flow</h3>
+            </div>
+            <div class="card-body">
+                <p>HostelFlow uses dish-aware modeling. When an item with higher preparation time is on the menu, student wait times increase linearly.</p>
+                
+                <div class="prep-speed-legend mt-3">
+                    <div class="legend-box speed-fast">
+                        <strong>🟢 Fast Serving (1–6 mins)</strong>
+                        <p>Pre-cooked staples like Poha, Upma, Idli, Dal Tadka. Diners flow through quickly.</p>
+                    </div>
+                    <div class="legend-box speed-moderate">
+                        <strong>🟡 Moderate (7–12 mins)</strong>
+                        <p>Items requiring frequent griddle replenishments like Puri Sabzi, Rajma Chawal, Chole Bhature.</p>
+                    </div>
+                    <div class="legend-box speed-slow">
+                        <strong>🔴 Made-to-Order (13+ mins)</strong>
+                        <p>Items cooked per student like Stuffed Parathas, Fresh Dosas, Dum Biryani. Highest queue bottleneck.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Full Weekly Menu Table -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h3>📅 Complete 7-Day Campus Mess Menu</h3>
+            <span class="badge badge-secondary">{{ menu_list|length }} Dishes Configured</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Day</th>
+                            <th>Meal Window</th>
+                            <th>Dish</th>
+                            <th>Prep Speed</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in menu_list %}
+                        <tr>
+                            <td><strong>{{ item.day_of_week }}</strong></td>
+                            <td>{{ item.meal_name }}</td>
+                            <td><strong>{{ item.dish_name }}</strong></td>
+                            <td>
+                                <span class="badge {% if item.expected_prep_time_minutes <= 6 %}badge-success{% elif item.expected_prep_time_minutes <= 12 %}badge-warning{% else %}badge-danger{% endif %}">
+                                    {{ item.expected_prep_time_minutes }} mins
+                                </span>
+                            </td>
+                            <td>
+                                <form action="{{ url_for('admin_menu') }}" method="POST" onsubmit="return confirm('Remove {{ item.dish_name }} from {{ item.day_of_week }}?');">
+                                    <input type="hidden" name="action" value="delete">
+                                    <input type="hidden" name="menu_id" value="{{ item.menu_id }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
